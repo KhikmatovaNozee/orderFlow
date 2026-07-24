@@ -1,0 +1,61 @@
+name: Tests & Coverage 🧪
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+          check-latest: true
+          cache-dependency-path: ./go.sum
+
+      - name: Tidy
+        run: go mod tidy
+
+      - name: Build & vet
+        run: |
+          go build ./...
+          go vet ./...
+
+      - name: Tests + coverage (без cmd)
+        run: go test $(go list ./... | grep -v '/cmd/') -coverprofile=coverage.out -covermode=atomic
+
+      - name: Race detector
+        run: go test -race $(go list ./... | grep -v '/cmd/')
+
+      - name: Total coverage в лог
+        run: go tool cover -func=coverage.out | tail -n 1
+
+      - name: Coverage → Cobertura
+        run: |
+          go install github.com/t-yuki/gocover-cobertura@latest
+          "$(go env GOPATH)/bin/gocover-cobertura" < coverage.out > coverage.xml
+
+      - name: Отчёт покрытия (порог 70/80)
+        if: github.event_name == 'pull_request'
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage.xml
+          badge: true
+          format: markdown
+          output: both
+          thresholds: "70 80"
+
+      - name: Комментарий покрытия в PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          recreate: true
+          path: code-coverage-results.md

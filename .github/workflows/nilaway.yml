@@ -1,0 +1,30 @@
+name: Nilaway 🛡️
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  nilaway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+          check-latest: true
+          cache-dependency-path: ./go.sum
+
+      - name: Install nilaway
+        run: go install go.uber.org/nilaway/cmd/nilaway@latest
+
+      - name: Nilaway (ищет потенциальные nil-разыменования)
+        # nilaway бывает шумит на корректном коде — не блокируем PR,
+        # но в логе видно, что подсветило.
+        run: "$(go env GOPATH)/bin/nilaway -test=false ./..."
+        continue-on-error: true
