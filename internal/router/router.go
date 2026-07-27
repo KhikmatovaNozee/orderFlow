@@ -1,21 +1,27 @@
 package router
 
 import (
+	"log/slog"
+
 	authhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/auth"
+	healthhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/health"
 	"github.com/KhikmatovaNozee/orderFlow/internal/middleware"
 	"github.com/KhikmatovaNozee/orderFlow/internal/service/auth"
 
 	"github.com/gin-gonic/gin"
 )
 
-func New(authHandler *authhandler.Handler, jwtService *auth.JWTService) *gin.Engine {
-	r := gin.Default()
+func New(
+	log *slog.Logger,
+	authHandler *authhandler.Handler,
+	jwtService *auth.JWTService,
+	healthHandler *healthhandler.Handler,
+) *gin.Engine {
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(middleware.Logging(log))
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status": "ok",
-		})
-	})
+	r.GET("/health", healthHandler.Check)
 
 	api := r.Group("/api/v1")
 	auth := api.Group("/auth")
