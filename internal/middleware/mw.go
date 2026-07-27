@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/KhikmatovaNozee/orderFlow/internal/model"
+	"github.com/KhikmatovaNozee/orderFlow/internal/respond"
 	"github.com/KhikmatovaNozee/orderFlow/internal/service/auth"
 	"github.com/gin-gonic/gin"
 )
@@ -13,26 +15,20 @@ func Auth(jwtService *auth.JWTService) gin.HandlerFunc {
 		header := c.GetHeader("Authorization")
 
 		if header == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "missing authorization header",
-			})
+			respond.Fail(c, http.StatusUnauthorized, "missing authorization header")
 			return
 		}
 
 		parts := strings.SplitN(header, " ", 2)
 
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "invalid authorization header",
-			})
+			respond.Fail(c, http.StatusUnauthorized, "invalid authorization header")
 			return
 		}
 
 		claims, err := jwtService.ParseAccessToken(parts[1])
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "invalid or expired token",
-			})
+			respond.Fail(c, http.StatusUnauthorized, "invalid or expired token")
 			return
 		}
 
@@ -48,17 +44,13 @@ func RequireRole(role string) gin.HandlerFunc {
 		value, exists := c.Get("role")
 
 		if !exists {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": "forbidden",
-			})
+			respond.Error(c, model.ErrForbidden)
 			return
 		}
 
 		userRole, ok := value.(string)
 		if !ok || userRole != role {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": "forbidden",
-			})
+			respond.Error(c, model.ErrForbidden)
 			return
 		}
 
