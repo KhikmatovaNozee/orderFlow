@@ -6,6 +6,7 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/orderflow
       JWT_SECRET: super-secret-key-change-me
+      LOG_LEVEL: info
     depends_on:
       postgres:
         condition: service_healthy
