@@ -3,20 +3,30 @@ package auth
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/KhikmatovaNozee/orderFlow/internal/model"
-	"github.com/KhikmatovaNozee/orderFlow/internal/respond"
 	"github.com/KhikmatovaNozee/orderFlow/internal/service/auth"
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	service *auth.Service
+	service    *auth.Service
+	jwtService *auth.JWTService
+}
+type loginRequest struct {
+	Login    string `json:"login"`
+	Password string `json:"password"`
 }
 
-func NewHandler(service *auth.Service) *Handler {
-	return &Handler{service: service}
+type refreshRequest struct {
+	RefreshToken string `json:"refresh"`
+}
+
+func NewHandler(service *auth.Service, jwtService *auth.JWTService) *Handler {
+	return &Handler{
+		service:    service,
+		jwtService: jwtService,
+	}
 }
 
 type registerRequest struct {
@@ -25,49 +35,123 @@ type registerRequest struct {
 	Role     string `json:"role"`
 }
 
-// userResponse — что отдаём наружу. Отдельная структура, а не model.User:
-// у модели есть PasswordHash, и если однажды кто-то отдаст модель целиком,
-// хеш утечёт. Явный тип это исключает на уровне компилятора.
-type userResponse struct {
-	ID        int64     `json:"id"`
-	Login     string    `json:"login"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 func (h *Handler) Register(c *gin.Context) {
 	var req registerRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		// Доменной ошибки тут нет — тело запроса не распарсилось,
-		// до сервиса дело не дошло. Поэтому явный код.
-		respond.Fail(c, http.StatusBadRequest, "invalid request body")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
 
-	user, err := h.service.Register(
-		c.Request.Context(),
-		req.Login,
-		req.Password,
-		req.Role)
+	user, err := h.service.Register(c.Request.Context(), req.Login, req.Password, req.Role)
+
 	if err != nil {
-		// Код подбирает общая таблица из respond (ErrInvalid→400,
-		// ErrConflict→409, остальное→500), а текст — наш, понятный клиенту.
 		switch {
 		case errors.Is(err, model.ErrInvalid):
-			respond.ErrorWithMessage(c, err, "invalid login, password or role")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid login, password or role"})
 		case errors.Is(err, model.ErrConflict):
-			respond.ErrorWithMessage(c, err, "login already exists")
+			c.JSON(http.StatusConflict, gin.H{"error": "login already exists"})
 		default:
-			respond.Error(c, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		}
 		return
 	}
 
-	respond.JSON(c, http.StatusCreated, userResponse{
-		ID:        user.ID,
-		Login:     user.Login,
-		Role:      user.Role,
-		CreatedAt: user.CreatedAt,
+	c.JSON(http.StatusCreated, gin.H{
+		"id":         user.ID,
+		"login":      user.Login,
+		"role":       user.Role,
+		"created_at": user.CreatedAt,
 	})
+}
+
+func (h *Handler) Login(c *gin.Context) {
+	var req loginRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request body",
+		})
+		return
+	}
+
+	accessToken, refreshToken, err := h.service.Login(
+		c.Request.Context(),
+		req.Login,
+		req.Password,
+	)
+
+	if err != nil {
+		if errors.Is(err, model.ErrInvalid) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid login or password",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    900,
+	})
+}
+
+func (h *Handler) Refresh(c *gin.Context) {
+	var req refreshRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request body",
+		})
+		return
+	}
+
+	accessToken, refreshToken, err := h.service.Refresh(
+		c.Request.Context(),
+		req.RefreshToken,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid refresh token",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    900,
+	})
+}
+
+func (h *Handler) Logout(c *gin.Context) {
+	var req refreshRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request body",
+		})
+		return
+	}
+
+	if err := h.service.Logout(
+		c.Request.Context(),
+		req.RefreshToken,
+	); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid refresh token",
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
