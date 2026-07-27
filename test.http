@@ -1,5 +1,5 @@
 ### Register user
-POST http://localhost:9999/api/v1/auth/register
+POST http://localhost:8080/api/v1/auth/register
 Content-Type: application/json
 
 {
@@ -8,12 +8,72 @@ Content-Type: application/json
   "role": "user"
 }
 
+
 ### Register seller
-POST http://localhost:9999/api/v1/auth/register
+POST http://localhost:8080/api/v1/auth/register
 Content-Type: application/json
 
 {
   "login": "seller1",
   "password": "password123",
   "role": "seller"
+}
+
+
+### Login
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "seller1",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("access_token", response.body.access_token);
+    client.global.set("refresh_token", response.body.refresh_token);
+%}
+
+###
+
+###
+POST http://localhost:8080/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh": "{{refresh_token}}"
+}
+
+> {%
+    client.global.set("access_token", response.body.access_token);
+    client.global.set("refresh_token", response.body.refresh_token);
+%}
+
+###
+
+###
+POST http://localhost:8080/api/v1/auth/logout
+Content-Type: application/json
+
+{
+  "refresh": "{{refresh_token}}"
+}
+
+###
+
+###
+POST http://localhost:8080/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh": "{{refresh_token}}"
+}
+
+###
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "seller1",
+  "password": "wrong-password"
 }
