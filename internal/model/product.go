@@ -9,7 +9,6 @@ type Product struct {
 	Price     int64     `json:"price"`
 	Stock     int64     `json:"stock"`
 	PhotoPath *string   `json:"photo_path"`
-	Status    int64     `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

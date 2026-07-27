@@ -1,10 +1,12 @@
 package router
 
 import (
+	authhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/auth"
+
 	"github.com/gin-gonic/gin"
 )
 
-func New() *gin.Engine {
+func New(authHandler *authhandler.Handler) *gin.Engine {
 	r := gin.Default()
 
 	r.GET("/health", func(c *gin.Context) {
@@ -20,6 +22,11 @@ func New() *gin.Engine {
 				"message": "pong",
 			})
 		})
+
+		auth := api.Group("/auth")
+		{
+			auth.POST("/register", authHandler.Register)
+		}
 	}
 
 	return r
