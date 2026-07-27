@@ -70,7 +70,7 @@ func main() {
 		authService,
 		jwtService,
 	)
-	r := router.New(authHandler)
+	r := router.New(authHandler, jwtService)
 
 	log.Println("Server starting on :8080")
 
