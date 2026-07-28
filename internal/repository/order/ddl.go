@@ -10,8 +10,10 @@ import (
 const ddlOrder = `create table if not exists orders(
     id bigserial primary key,
     user_id bigint not null references users(id),
-    status varchar(50) not null default 'new',
-    created_at timestamp  with time zone not null default now()
+    status varchar(50) not null default 'new'
+        check (status in ('new', 'paid', 'shipped', 'cancelled')),
+    total bigint not null default 0,
+    created_at timestamp with time zone not null default now()
 )`
 
 const ddlOrderItem = `create table if not exists order_items(
@@ -31,7 +33,6 @@ func runDdl(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return fmt.Errorf("create order: %w", err)
 	}
-
 	_, err = pool.Exec(ctx, ddlOrderItem)
 	if err != nil {
 		return fmt.Errorf("create order_item: %w", err)
