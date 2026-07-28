@@ -13,6 +13,7 @@ import (
 
 	authhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/auth"
 	healthhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/health"
+	producthandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/product"
 	"github.com/KhikmatovaNozee/orderFlow/internal/logger"
 	orderrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/order"
 	productrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/product"
@@ -20,6 +21,7 @@ import (
 	userrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/user"
 	"github.com/KhikmatovaNozee/orderFlow/internal/router"
 	authservice "github.com/KhikmatovaNozee/orderFlow/internal/service/auth"
+	productservice "github.com/KhikmatovaNozee/orderFlow/internal/service/product"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -67,6 +69,7 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("create postgres pool: %w", err)
 	}
+
 	defer func() {
 		log.Info("closing database pool")
 		pool.Close()
@@ -84,15 +87,19 @@ func run(log *slog.Logger) error {
 	refreshTokenRepository := refreshtoken.NewRepository(pool)
 	jwtService := authservice.NewJWTService(jwtSecret)
 
-	authService := authservice.NewService(
+	authSvc := authservice.NewService(
 		userRepository,
 		refreshTokenRepository,
 		jwtService,
 	)
-	authHandler := authhandler.NewHandler(authService, jwtService)
+	authHandler := authhandler.NewHandler(authSvc, jwtService)
 	healthHandler := healthhandler.NewHandler(pool)
 
-	engine := router.New(log, authHandler, jwtService, healthHandler)
+	productRepository := productrepo.New(pool)
+	productSvc := productservice.NewService(productRepository)
+	productHandler := producthandler.NewHandler(productSvc)
+
+	engine := router.New(log, authHandler, jwtService, healthHandler, productHandler)
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -125,6 +132,7 @@ func run(log *slog.Logger) error {
 	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancelShutdown()
 
+	// Перестаём принимать новые соединения и ждём, пока текущие дослужатся.
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown http server: %w", err)
 	}

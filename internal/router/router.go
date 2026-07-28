@@ -5,6 +5,7 @@ import (
 
 	authhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/auth"
 	healthhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/health"
+	producthandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/product"
 	"github.com/KhikmatovaNozee/orderFlow/internal/middleware"
 	"github.com/KhikmatovaNozee/orderFlow/internal/service/auth"
 
@@ -16,6 +17,7 @@ func New(
 	authHandler *authhandler.Handler,
 	jwtService *auth.JWTService,
 	healthHandler *healthhandler.Handler,
+	productHandler *producthandler.Handler,
 ) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -41,6 +43,9 @@ func New(
 				"role":    c.MustGet("role"),
 			})
 		})
+
+		authed.GET("/products", productHandler.List)
+		authed.GET("/products/:id", productHandler.Get)
 	}
 
 	manage := authed.Group("/manage")
