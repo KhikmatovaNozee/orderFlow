@@ -1,0 +1,16 @@
+mode: set
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:28.47,29.49 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:29.49,32.3 2 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:33.2,33.20 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:36.39,39.2 2 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:41.66,43.46 2 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:43.46,45.3 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:46.2,46.26 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:49.53,51.2 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:53.28,56.2 2 0
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:58.39,59.16 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:59.16,61.3 1 0
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:63.2,63.33 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:63.33,64.33 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:64.33,66.4 1 1
+github.com/KhikmatovaNozee/orderFlow/internal/respond/respond.go:69.2,69.56 1 1
