@@ -24,6 +24,7 @@ func New(
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logging(log))
+	r.Static("/uploads", "./uploads")
 
 	r.GET("/health", healthHandler.Check)
 
@@ -59,6 +60,11 @@ func New(
 				"message": "seller access granted",
 			})
 		})
+
+		manage.POST("/products", productHandler.Create)
+		manage.PUT("/products/:id", productHandler.Update)
+		manage.DELETE("/products/:id", productHandler.Delete)
+		manage.POST("/products/:id/photo", productHandler.UploadPhoto)
 	}
 
 	return r
