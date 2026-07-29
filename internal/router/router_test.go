@@ -29,6 +29,9 @@ func TestNew(t *testing.T) {
 		"PUT /api/v1/manage/products/:id",
 		"DELETE /api/v1/manage/products/:id",
 		"POST /api/v1/manage/products/:id/photo",
+		"PUT /api/v1/manage/orders/:id/ship",
+		"GET /api/v1/manage/orders",
+		"GET /api/v1/manage/orders/:id",
 	}
 
 	registered := make(map[string]bool)

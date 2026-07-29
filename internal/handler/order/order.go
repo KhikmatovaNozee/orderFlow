@@ -76,7 +76,14 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	result, err := h.service.List(c.Request.Context(), userID, filter)
+	role, _ := c.Get("role")
+	var result model.OrderListResult
+
+	if role == "seller" {
+		result, err = h.service.ListSeller(c.Request.Context(), userID, filter)
+	} else {
+		result, err = h.service.List(c.Request.Context(), userID, filter)
+	}
 	if err != nil {
 		respond.Error(c, err)
 		return
@@ -112,6 +119,30 @@ func (h *Handler) Get(c *gin.Context) {
 	respond.JSON(c, http.StatusOK, detail)
 }
 
+func (h *Handler) ListSellerOrders(c *gin.Context) {
+	sellerID, ok := userIDFromContext(c)
+	if !ok {
+		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	filter, err := parseOrderFilter(c)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.service.ListSellerOrders(c.Request.Context(), sellerID, filter)
+	if err != nil {
+		respond.Error(c, err)
+		return
+	}
+	respond.JSON(c, http.StatusOK, ordersResponse{
+		Items: result.Items,
+		Total: result.Total,
+		Page:  result.Page,
+		Limit: result.Limit,
+	})
+}
+
 func (h *Handler) Pay(c *gin.Context) {
 	userID, ok := userIDFromContext(c)
 	if !ok {
@@ -132,6 +163,26 @@ func (h *Handler) Pay(c *gin.Context) {
 	}
 
 	respond.JSON(c, http.StatusOK, order)
+}
+
+func (h *Handler) GetSellerOrder(c *gin.Context) {
+	sellerID, ok := userIDFromContext(c)
+	if !ok {
+		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	orderID, err := parseOrderID(c)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, "invalid order id")
+		return
+	}
+	detail, err := h.service.GetSellerOrder(c.Request.Context(), sellerID, orderID)
+	if err != nil {
+		respond.Error(c, err)
+		return
+	}
+
+	respond.JSON(c, http.StatusOK, detail)
 }
 
 func (h *Handler) Cancel(c *gin.Context) {
@@ -192,4 +243,19 @@ func userIDFromContext(c *gin.Context) (int64, bool) {
 	}
 	id, ok := v.(int64)
 	return id, ok
+}
+
+func (h *Handler) Ship(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		respond.Fail(c, 400, "invalid order id")
+		return
+	}
+
+	err = h.service.Ship(c.Request.Context(), id)
+	if err != nil {
+		respond.Error(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
