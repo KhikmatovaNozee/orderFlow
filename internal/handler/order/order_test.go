@@ -21,11 +21,10 @@ type fakeRepo struct {
 	listFn             func(ctx context.Context, f model.OrderFilter) (model.OrderListResult, error)
 	getDetailFn        func(ctx context.Context, id int64) (*model.OrderDetail, error)
 	listSellerOrdersFn func(ctx context.Context, sellerID int64, f model.OrderFilter) (model.OrderListResult, error)
-	getByIDFn          func(ctx context.Context, id int64) (*model.Order, error)
-	updateStatusFn     func(ctx context.Context, id int64, status string) error
 	getSellerOrderFn   func(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error)
 	payFn              func(ctx context.Context, id int64) (*model.Order, error)
 	cancelFn           func(ctx context.Context, id int64) (*model.Order, error)
+	shipFn             func(ctx context.Context, id int64) (*model.Order, error)
 }
 
 func (f *fakeRepo) PlaceOrder(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error) {
@@ -53,25 +52,18 @@ func (f *fakeRepo) ListSellerOrders(ctx context.Context, sellerID int64, filter 
 	return f.listSellerOrdersFn(ctx, sellerID, filter)
 }
 
-func (f *fakeRepo) GetByID(ctx context.Context, id int64) (*model.Order, error) {
-	if f.getByIDFn == nil {
-		return nil, model.ErrNotFound
-	}
-	return f.getByIDFn(ctx, id)
-}
-
-func (f *fakeRepo) UpdateStatus(ctx context.Context, id int64, status string) error {
-	if f.updateStatusFn == nil {
-		return nil
-	}
-	return f.updateStatusFn(ctx, id, status)
-}
-
 func (f *fakeRepo) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error) {
 	if f.getSellerOrderFn == nil {
 		return nil, model.ErrNotFound
 	}
 	return f.getSellerOrderFn(ctx, sellerID, orderID)
+}
+
+func (f *fakeRepo) Ship(ctx context.Context, id int64) (*model.Order, error) {
+	if f.shipFn == nil {
+		return nil, model.ErrInvalid
+	}
+	return f.shipFn(ctx, id)
 }
 
 func (f *fakeRepo) Pay(ctx context.Context, id int64) (*model.Order, error) {
@@ -101,6 +93,7 @@ func setupRouter(repo *fakeRepo) *gin.Engine {
 	r.GET("/orders/:id", handler.Get)
 	r.PUT("/orders/:id/pay", handler.Pay)
 	r.PUT("/orders/:id/cancel", handler.Cancel)
+	r.PUT("/manage/orders/:id/ship", handler.Ship)
 	return r
 }
 
@@ -264,6 +257,60 @@ func TestCancel(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(http.MethodPut, "/orders/1/cancel", nil)
+			w := httptest.NewRecorder()
+			setupRouter(repo).ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d, body=%s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestShip(t *testing.T) {
+	tests := []struct {
+		name           string
+		order          *model.OrderDetail
+		sellerOrderErr error
+		shipErr        error
+		wantStatus     int
+	}{
+		{
+			name:       "успешная отгрузка",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, Status: model.OrderStatusPaid}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:           "заказ не содержит товаров этого продавца — 404",
+			sellerOrderErr: model.ErrNotFound,
+			wantStatus:     http.StatusNotFound,
+		},
+		{
+			name:       "заказ ещё не оплачен — 400",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, Status: model.OrderStatusNew}},
+			shipErr:    model.ErrInvalid,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &fakeRepo{
+				getSellerOrderFn: func(context.Context, int64, int64) (*model.OrderDetail, error) {
+					if tt.sellerOrderErr != nil {
+						return nil, tt.sellerOrderErr
+					}
+					return tt.order, nil
+				},
+				shipFn: func(context.Context, int64) (*model.Order, error) {
+					if tt.shipErr != nil {
+						return nil, tt.shipErr
+					}
+					return &model.Order{ID: 1, Status: model.OrderStatusShipped}, nil
+				},
+			}
+
+			req := httptest.NewRequest(http.MethodPut, "/manage/orders/1/ship", nil)
 			w := httptest.NewRecorder()
 			setupRouter(repo).ServeHTTP(w, req)
 

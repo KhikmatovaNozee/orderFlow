@@ -76,14 +76,7 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	role, _ := c.Get("role")
-	var result model.OrderListResult
-
-	if role == "seller" {
-		result, err = h.service.ListSeller(c.Request.Context(), userID, filter)
-	} else {
-		result, err = h.service.List(c.Request.Context(), userID, filter)
-	}
+	result, err := h.service.List(c.Request.Context(), userID, filter)
 	if err != nil {
 		respond.Error(c, err)
 		return
@@ -246,16 +239,23 @@ func userIDFromContext(c *gin.Context) (int64, bool) {
 }
 
 func (h *Handler) Ship(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		respond.Fail(c, 400, "invalid order id")
+	sellerID, ok := userIDFromContext(c)
+	if !ok {
+		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	err = h.service.Ship(c.Request.Context(), id)
+	orderID, err := parseOrderID(c)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, "invalid order id")
+		return
+	}
+
+	order, err := h.service.Ship(c.Request.Context(), sellerID, orderID)
 	if err != nil {
 		respond.Error(c, err)
 		return
 	}
-	c.Status(http.StatusNoContent)
+
+	respond.JSON(c, http.StatusOK, order)
 }
