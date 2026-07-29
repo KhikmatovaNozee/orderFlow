@@ -11,6 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const (
+	defaultLimit = 20
+	maxLimit     = 100
+)
+
 type Repo struct {
 	pool *pgxpool.Pool
 }
@@ -106,4 +111,105 @@ func decrementStock(ctx context.Context, tx pgx.Tx, item model.OrderLineInput) (
 	}
 
 	return price, nil
+}
+
+func (r *Repo) List(ctx context.Context, f model.OrderFilter) (model.OrderListResult, error) {
+	page := f.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := f.Limit
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	conditions := []string{"user_id = $1"}
+	args := []any{*f.UserID}
+
+	if f.Status != nil {
+		args = append(args, *f.Status)
+		conditions = append(conditions, fmt.Sprintf("status = $%d", len(args)))
+	}
+
+	where := "WHERE " + conditions[0]
+	for _, c := range conditions[1:] {
+		where += " AND " + c
+	}
+
+	var total int
+	countQuery := fmt.Sprintf("SELECT count(*) FROM orders %s", where)
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return model.OrderListResult{}, fmt.Errorf("count orders: %w", err)
+	}
+
+	offset := (page - 1) * limit
+	listArgs := append(append([]any{}, args...), limit, offset)
+	listQuery := fmt.Sprintf(
+		`SELECT id, user_id, status, total, created_at
+		 FROM orders %s
+		 ORDER BY id DESC
+		 LIMIT $%d OFFSET $%d`,
+		where, len(args)+1, len(args)+2,
+	)
+
+	rows, err := r.pool.Query(ctx, listQuery, listArgs...)
+	if err != nil {
+		return model.OrderListResult{}, fmt.Errorf("list orders: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]model.Order, 0, limit)
+	for rows.Next() {
+		var o model.Order
+		if err := rows.Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.CreatedAt); err != nil {
+			return model.OrderListResult{}, fmt.Errorf("scan order: %w", err)
+		}
+		items = append(items, o)
+	}
+	if err := rows.Err(); err != nil {
+		return model.OrderListResult{}, fmt.Errorf("iterate orders: %w", err)
+	}
+
+	return model.OrderListResult{Items: items, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (r *Repo) GetDetail(ctx context.Context, id int64) (*model.OrderDetail, error) {
+	var detail model.OrderDetail
+
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, user_id, status, total, created_at FROM orders WHERE id = $1`,
+		id,
+	).Scan(&detail.ID, &detail.UserID, &detail.Status, &detail.Total, &detail.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, model.ErrNotFound
+		}
+		return nil, fmt.Errorf("get order: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, order_id, product_id, quantity, price FROM order_items WHERE order_id = $1 ORDER BY id`,
+		id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list order items: %w", err)
+	}
+	defer rows.Close()
+
+	detail.Items = make([]model.OrderItem, 0)
+	for rows.Next() {
+		var it model.OrderItem
+		if err := rows.Scan(&it.ID, &it.OrderID, &it.ProductID, &it.Quantity, &it.Price); err != nil {
+			return nil, fmt.Errorf("scan order item: %w", err)
+		}
+		detail.Items = append(detail.Items, it)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate order items: %w", err)
+	}
+
+	return &detail, nil
 }

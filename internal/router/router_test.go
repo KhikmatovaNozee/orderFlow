@@ -20,6 +20,8 @@ func TestNew(t *testing.T) {
 		"GET /api/v1/products",
 		"GET /api/v1/products/:id",
 		"POST /api/v1/orders",
+		"GET /api/v1/orders",
+		"GET /api/v1/orders/:id",
 		"GET /api/v1/manage/test",
 		"POST /api/v1/manage/products",
 		"PUT /api/v1/manage/products/:id",
