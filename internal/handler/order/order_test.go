@@ -17,9 +17,13 @@ func init() {
 }
 
 type fakeRepo struct {
-	placeOrderFn func(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error)
-	listFn       func(ctx context.Context, f model.OrderFilter) (model.OrderListResult, error)
-	getDetailFn  func(ctx context.Context, id int64) (*model.OrderDetail, error)
+	placeOrderFn       func(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error)
+	listFn             func(ctx context.Context, f model.OrderFilter) (model.OrderListResult, error)
+	getDetailFn        func(ctx context.Context, id int64) (*model.OrderDetail, error)
+	listSellerOrdersFn func(ctx context.Context, sellerID int64, f model.OrderFilter) (model.OrderListResult, error)
+	getByIDFn          func(ctx context.Context, id int64) (*model.Order, error)
+	updateStatusFn     func(ctx context.Context, id int64, status string) error
+	getSellerOrderFn   func(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error)
 }
 
 func (f *fakeRepo) PlaceOrder(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error) {
@@ -38,6 +42,34 @@ func (f *fakeRepo) GetDetail(ctx context.Context, id int64) (*model.OrderDetail,
 		return nil, model.ErrNotFound
 	}
 	return f.getDetailFn(ctx, id)
+}
+
+func (f *fakeRepo) ListSellerOrders(ctx context.Context, sellerID int64, filter model.OrderFilter) (model.OrderListResult, error) {
+	if f.listSellerOrdersFn == nil {
+		return model.OrderListResult{}, nil
+	}
+	return f.listSellerOrdersFn(ctx, sellerID, filter)
+}
+
+func (f *fakeRepo) GetByID(ctx context.Context, id int64) (*model.Order, error) {
+	if f.getByIDFn == nil {
+		return nil, model.ErrNotFound
+	}
+	return f.getByIDFn(ctx, id)
+}
+
+func (f *fakeRepo) UpdateStatus(ctx context.Context, id int64, status string) error {
+	if f.updateStatusFn == nil {
+		return nil
+	}
+	return f.updateStatusFn(ctx, id, status)
+}
+
+func (f *fakeRepo) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error) {
+	if f.getSellerOrderFn == nil {
+		return nil, model.ErrNotFound
+	}
+	return f.getSellerOrderFn(ctx, sellerID, orderID)
 }
 
 func setupRouter(repo *fakeRepo) *gin.Engine {

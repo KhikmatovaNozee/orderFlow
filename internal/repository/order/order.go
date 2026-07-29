@@ -213,3 +213,63 @@ func (r *Repo) GetDetail(ctx context.Context, id int64) (*model.OrderDetail, err
 
 	return &detail, nil
 }
+
+func (r *Repo) ListSellerOrders(ctx context.Context, sellerID int64, f model.OrderFilter) (model.OrderListResult, error) {
+	args := []any{sellerID}
+	query := `SELECT DISTINCT o.id, o.user_id, o.status, o.total, o.created_at FROM orders o JOIN order_items oi ON oi.order_id=o.id
+			JOIN products p ON p.id=oi.product_id WHERE p.seller_id=$1`
+
+	if f.Status != nil {
+		query += " AND o.status=$2"
+		args = append(args, *f.Status)
+	}
+
+	query += " ORDER BY o.id DESC"
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return model.OrderListResult{}, err
+	}
+	defer rows.Close()
+
+	items := make([]model.Order, 0)
+	for rows.Next() {
+		var o model.Order
+		err := rows.Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.CreatedAt)
+		if err != nil {
+			return model.OrderListResult{}, err
+		}
+		items = append(items, o)
+	}
+
+	return model.OrderListResult{
+		Items: items,
+		Total: len(items),
+	}, nil
+}
+
+func (r *Repo) GetByID(ctx context.Context, id int64) (*model.Order, error) {
+	var o model.Order
+	err := r.pool.QueryRow(ctx, `SELECT id,user_id,status,total,created_at FROM orders WHERE id=$1`, id).Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.CreatedAt)
+
+	if err != nil {
+		return nil, model.ErrNotFound
+	}
+	return &o, nil
+}
+
+func (r *Repo) UpdateStatus(ctx context.Context, id int64, status string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE orders SET status=$1 WHERE id=$2`, status, id)
+	return err
+}
+
+func (r *Repo) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error) {
+	const q = `SELECT o.id, o.user_id, o.status, o.total, o.created_at FROM orders o JOIN order_items oi ON oi.order_id = o.id
+    JOIN products p ON p.id = oi.product_id WHERE o.id=$1 AND p.seller_id=$2`
+
+	var detail model.OrderDetail
+	err := r.pool.QueryRow(ctx, q, orderID, sellerID).Scan(&detail.ID, &detail.UserID, &detail.Status, &detail.Total, &detail.CreatedAt)
+	if err != nil {
+		return nil, model.ErrNotFound
+	}
+	return &detail, nil
+}

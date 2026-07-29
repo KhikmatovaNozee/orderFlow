@@ -211,3 +211,88 @@ Content-Type: application/json
 }
 
 ###
+
+### ==================== B-02: Seller управление заказами ====================
+
+### Login seller заново (получаем seller token)
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "seller1",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("seller_access_token", response.body.access_token);
+%}
+
+
+###
+
+POST http://localhost:8080/api/v1/manage/products
+Authorization: Bearer {{seller_access_token}}
+Content-Type: application/json
+
+{
+  "name": "Тестовый товар",
+  "category": "electronics",
+  "price": 50000,
+  "stock": 10
+}
+
+###
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+"login": "sevara",
+"password": "password123"
+}
+
+###
+POST http://localhost:8080/api/v1/orders
+Authorization: Bearer {{user_access_token}}
+Content-Type: application/json
+
+{
+"items":[
+{
+"product_id":2,
+"quantity":1
+}
+]
+}
+
+### Seller смотрит свои заказы
+GET http://localhost:8080/api/v1/manage/orders
+Authorization: Bearer {{seller_access_token}}
+
+
+###
+
+### Seller получает детали заказа
+GET http://localhost:8080/api/v1/manage/orders/{{order_id}}
+Authorization: Bearer {{seller_access_token}}
+
+
+###
+
+### Seller отправляет заказ (ship)
+PUT http://localhost:8080/api/v1/manage/orders/{{order_id}}/ship
+Authorization: Bearer {{seller_access_token}}
+
+
+###
+
+### Проверка: заказ должен быть shipped
+GET http://localhost:8080/api/v1/manage/orders/{{order_id}}
+Authorization: Bearer {{seller_access_token}}
+
+### Повторная отправка уже shipped заказа — ждём 400
+PUT http://localhost:8080/api/v1/manage/orders/{{order_id}}/ship
+Authorization: Bearer {{seller_access_token}}
+
+###
+GET http://localhost:8080/api/v1/manage/orders/1
+Authorization: Bearer {{seller_access_token}}

@@ -67,6 +67,9 @@ func New(
 		manage.PUT("/products/:id", productHandler.Update)
 		manage.DELETE("/products/:id", productHandler.Delete)
 		manage.POST("/products/:id/photo", productHandler.UploadPhoto)
+		manage.GET("/orders", orderHandler.ListSellerOrders)
+		manage.GET("/orders/:id", orderHandler.GetSellerOrder)
+		manage.PUT("/orders/:id/ship", orderHandler.Ship)
 	}
 
 	return r
