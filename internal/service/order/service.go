@@ -14,6 +14,8 @@ type Repository interface {
 	GetByID(ctx context.Context, id int64) (*model.Order, error)
 	UpdateStatus(ctx context.Context, id int64, status string) error
 	GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error)
+	Pay(ctx context.Context, id int64) (*model.Order, error)
+	Cancel(ctx context.Context, id int64) (*model.Order, error)
 }
 
 type Service struct {
@@ -76,4 +78,24 @@ func (s *Service) ListSellerOrders(ctx context.Context, sellerID int64, f model.
 
 func (s *Service) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error) {
 	return s.repo.GetSellerOrder(ctx, sellerID, orderID)
+func (s *Service) Pay(ctx context.Context, userID, orderID int64) (*model.Order, error) {
+	detail, err := s.repo.GetDetail(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if detail.UserID != userID {
+		return nil, model.ErrForbidden
+	}
+	return s.repo.Pay(ctx, orderID)
+}
+
+func (s *Service) Cancel(ctx context.Context, userID, orderID int64) (*model.Order, error) {
+	detail, err := s.repo.GetDetail(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if detail.UserID != userID {
+		return nil, model.ErrForbidden
+	}
+	return s.repo.Cancel(ctx, orderID)
 }

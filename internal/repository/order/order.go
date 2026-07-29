@@ -272,4 +272,79 @@ func (r *Repo) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64
 		return nil, model.ErrNotFound
 	}
 	return &detail, nil
+func (r *Repo) Pay(ctx context.Context, id int64) (*model.Order, error) {
+	var o model.Order
+	err := r.pool.QueryRow(ctx,
+		`UPDATE orders SET status = $1 WHERE id = $2 AND status = $3
+		 RETURNING id, user_id, status, total, created_at`,
+		model.OrderStatusPaid, id, model.OrderStatusNew,
+	).Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, model.ErrInvalid
+		}
+		return nil, fmt.Errorf("pay order: %w", err)
+	}
+	return &o, nil
+}
+
+func (r *Repo) Cancel(ctx context.Context, id int64) (*model.Order, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var o model.Order
+	err = tx.QueryRow(ctx,
+		`UPDATE orders SET status = $1 WHERE id = $2 AND status = $3
+		 RETURNING id, user_id, status, total, created_at`,
+		model.OrderStatusCancelled, id, model.OrderStatusNew,
+	).Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, model.ErrInvalid
+		}
+		return nil, fmt.Errorf("cancel order: %w", err)
+	}
+
+	rows, err := tx.Query(ctx,
+		`SELECT product_id, quantity FROM order_items WHERE order_id = $1`, id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list order items for cancel: %w", err)
+	}
+
+	type line struct {
+		productID int64
+		quantity  int64
+	}
+	var lines []line
+	for rows.Next() {
+		var l line
+		if err := rows.Scan(&l.productID, &l.quantity); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan order item for cancel: %w", err)
+		}
+		lines = append(lines, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate order items for cancel: %w", err)
+	}
+
+	for _, l := range lines {
+		if _, err := tx.Exec(ctx,
+			`UPDATE products SET stock = stock + $1 WHERE id = $2`,
+			l.quantity, l.productID,
+		); err != nil {
+			return nil, fmt.Errorf("return stock for product %d: %w", l.productID, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit cancel tx: %w", err)
+	}
+
+	return &o, nil
 }

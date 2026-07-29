@@ -49,9 +49,12 @@ func New(
 
 		authed.GET("/products", productHandler.List)
 		authed.GET("/products/:id", productHandler.Get)
+
 		authed.POST("/orders", orderHandler.Place)
 		authed.GET("/orders", orderHandler.List)
 		authed.GET("/orders/:id", orderHandler.Get)
+		authed.PUT("/orders/:id/pay", orderHandler.Pay)
+		authed.PUT("/orders/:id/cancel", orderHandler.Cancel)
 	}
 
 	manage := authed.Group("/manage")

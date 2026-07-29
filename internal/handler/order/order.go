@@ -105,7 +105,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	orderID, err := parseOrderID(c)
 	if err != nil {
 		respond.Fail(c, http.StatusBadRequest, "invalid order id")
 		return
@@ -123,6 +123,8 @@ func (h *Handler) Get(c *gin.Context) {
 func (h *Handler) ListSellerOrders(c *gin.Context) {
 	sellerID, ok := userIDFromContext(c)
 	fmt.Println("SELLER ID FROM TOKEN:", sellerID)
+func (h *Handler) Pay(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
 	if !ok {
 		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
 		return
@@ -133,6 +135,14 @@ func (h *Handler) ListSellerOrders(c *gin.Context) {
 		return
 	}
 	result, err := h.service.ListSellerOrders(c.Request.Context(), sellerID, filter)
+
+	orderID, err := parseOrderID(c)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, "invalid order id")
+		return
+	}
+
+	order, err := h.service.Pay(c.Request.Context(), userID, orderID)
 	if err != nil {
 		respond.Error(c, err)
 		return
@@ -147,24 +157,37 @@ func (h *Handler) ListSellerOrders(c *gin.Context) {
 
 func (h *Handler) GetSellerOrder(c *gin.Context) {
 	sellerID, ok := userIDFromContext(c)
+
+	respond.JSON(c, http.StatusOK, order)
+}
+
+func (h *Handler) Cancel(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
 	if !ok {
 		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	orderID, err := parseOrderID(c)
 	if err != nil {
 		respond.Fail(c, http.StatusBadRequest, "invalid order id")
 		return
 	}
 
 	detail, err := h.service.GetSellerOrder(c.Request.Context(), sellerID, orderID)
+	order, err := h.service.Cancel(c.Request.Context(), userID, orderID)
 	if err != nil {
 		respond.Error(c, err)
 		return
 	}
 
 	respond.JSON(c, http.StatusOK, detail)
+	respond.JSON(c, http.StatusOK, order)
+}
+
+func parseOrderID(c *gin.Context) (int64, error) {
+	return strconv.ParseInt(c.Param("id"), 10, 64)
 }
 
 func parseOrderFilter(c *gin.Context) (model.OrderFilter, error) {
