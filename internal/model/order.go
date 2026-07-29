@@ -16,3 +16,22 @@ type Order struct {
 	Total     int64     `json:"total"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type OrderFilter struct {
+	UserID *int64
+	Status *string
+	Page   int
+	Limit  int
+}
+
+type OrderListResult struct {
+	Items []Order
+	Total int
+	Page  int
+	Limit int
+}
+
+type OrderDetail struct {
+	Order
+	Items []OrderItem `json:"items"`
+}

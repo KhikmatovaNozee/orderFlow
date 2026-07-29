@@ -1,7 +1,9 @@
 package order
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/KhikmatovaNozee/orderFlow/internal/model"
 	"github.com/KhikmatovaNozee/orderFlow/internal/respond"
@@ -52,6 +54,87 @@ func (h *Handler) Place(c *gin.Context) {
 	}
 
 	respond.JSON(c, http.StatusCreated, order)
+}
+
+type ordersResponse struct {
+	Items []model.Order `json:"items"`
+	Total int           `json:"total"`
+	Page  int           `json:"page"`
+	Limit int           `json:"limit"`
+}
+
+func (h *Handler) List(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	filter, err := parseOrderFilter(c)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	result, err := h.service.List(c.Request.Context(), userID, filter)
+	if err != nil {
+		respond.Error(c, err)
+		return
+	}
+
+	respond.JSON(c, http.StatusOK, ordersResponse{
+		Items: result.Items,
+		Total: result.Total,
+		Page:  result.Page,
+		Limit: result.Limit,
+	})
+}
+
+func (h *Handler) Get(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, "invalid order id")
+		return
+	}
+
+	detail, err := h.service.GetDetail(c.Request.Context(), userID, orderID)
+	if err != nil {
+		respond.Error(c, err)
+		return
+	}
+
+	respond.JSON(c, http.StatusOK, detail)
+}
+
+func parseOrderFilter(c *gin.Context) (model.OrderFilter, error) {
+	var f model.OrderFilter
+
+	if status := c.Query("status"); status != "" {
+		f.Status = &status
+	}
+
+	if raw := c.Query("page"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return f, errors.New("invalid page")
+		}
+		f.Page = v
+	}
+	if raw := c.Query("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return f, errors.New("invalid limit")
+		}
+		f.Limit = v
+	}
+
+	return f, nil
 }
 
 func userIDFromContext(c *gin.Context) (int64, bool) {
