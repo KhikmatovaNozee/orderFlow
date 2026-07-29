@@ -6,7 +6,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	engine := New(slog.Default(), nil, nil, nil, nil)
+	engine := New(slog.Default(), nil, nil, nil, nil, nil)
 
 	want := []string{
 		"GET /health",
@@ -17,6 +17,7 @@ func TestNew(t *testing.T) {
 		"GET /api/v1/protected",
 		"GET /api/v1/products",
 		"GET /api/v1/products/:id",
+		"POST /api/v1/orders",
 		"GET /api/v1/manage/test",
 	}
 

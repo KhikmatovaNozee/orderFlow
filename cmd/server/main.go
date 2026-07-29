@@ -13,6 +13,7 @@ import (
 
 	authhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/auth"
 	healthhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/health"
+	orderhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/order"
 	producthandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/product"
 	"github.com/KhikmatovaNozee/orderFlow/internal/logger"
 	orderrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/order"
@@ -21,6 +22,7 @@ import (
 	userrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/user"
 	"github.com/KhikmatovaNozee/orderFlow/internal/router"
 	authservice "github.com/KhikmatovaNozee/orderFlow/internal/service/auth"
+	orderservice "github.com/KhikmatovaNozee/orderFlow/internal/service/order"
 	productservice "github.com/KhikmatovaNozee/orderFlow/internal/service/product"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -99,7 +101,11 @@ func run(log *slog.Logger) error {
 	productSvc := productservice.NewService(productRepository)
 	productHandler := producthandler.NewHandler(productSvc)
 
-	engine := router.New(log, authHandler, jwtService, healthHandler, productHandler)
+	orderRepository := orderrepo.New(pool)
+	orderSvc := orderservice.NewService(orderRepository)
+	orderHandler := orderhandler.NewHandler(orderSvc)
+
+	engine := router.New(log, authHandler, jwtService, healthHandler, productHandler, orderHandler)
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -132,7 +138,6 @@ func run(log *slog.Logger) error {
 	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancelShutdown()
 
-	// Перестаём принимать новые соединения и ждём, пока текущие дослужатся.
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown http server: %w", err)
 	}
