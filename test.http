@@ -29,10 +29,9 @@ Content-Type: application/json
 }
 
 > {%
-    client.global.set("access_token", response.body.access_token);
-    client.global.set("refresh_token", response.body.refresh_token);
+    client.global.set("seller_access_token", response.body.access_token);
+    client.log(response.body.access_token);
 %}
-
 
 ### Protected test
 GET http://localhost:8080/api/v1/protected
@@ -295,4 +294,10 @@ Authorization: Bearer {{seller_access_token}}
 
 ###
 GET http://localhost:8080/api/v1/manage/orders/1
+Authorization: Bearer {{seller_access_token}}
+
+### ==================== B-03: Статистика продаж ====================
+
+### Seller статистика продаж
+GET http://localhost:8080/api/v1/manage/stats
 Authorization: Bearer {{seller_access_token}}
