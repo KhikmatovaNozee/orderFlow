@@ -13,14 +13,14 @@ type fakeRepo struct {
 	listFn             func(ctx context.Context, f model.OrderFilter) (model.OrderListResult, error)
 	getDetailFn        func(ctx context.Context, id int64) (*model.OrderDetail, error)
 	listSellerOrdersFn func(ctx context.Context, sellerID int64, f model.OrderFilter) (model.OrderListResult, error)
-	getByIDFn          func(ctx context.Context, id int64) (*model.Order, error)
-	updateStatusFn     func(ctx context.Context, id int64, status string) error
 	getSellerOrderFn   func(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error)
 	gotFilter          model.OrderFilter
 	payFn              func(ctx context.Context, id int64) (*model.Order, error)
 	cancelFn           func(ctx context.Context, id int64) (*model.Order, error)
+	shipFn             func(ctx context.Context, id int64) (*model.Order, error)
 	payCalled          bool
 	cancelCalled       bool
+	shipCalled         bool
 }
 
 func (f *fakeRepo) PlaceOrder(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error) {
@@ -55,25 +55,16 @@ func (f *fakeRepo) ListSellerOrders(
 	return f.listSellerOrdersFn(ctx, sellerID, filter)
 }
 
-func (f *fakeRepo) GetByID(ctx context.Context, id int64) (*model.Order, error) {
-	if f.getByIDFn == nil {
-		return nil, model.ErrNotFound
-	}
-	return f.getByIDFn(ctx, id)
-}
-
-func (f *fakeRepo) UpdateStatus(ctx context.Context, id int64, status string) error {
-	if f.updateStatusFn == nil {
-		return nil
-	}
-	return f.updateStatusFn(ctx, id, status)
-}
-
 func (f *fakeRepo) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error) {
 	if f.getSellerOrderFn == nil {
 		return nil, model.ErrNotFound
 	}
 	return f.getSellerOrderFn(ctx, sellerID, orderID)
+}
+
+func (f *fakeRepo) Ship(ctx context.Context, id int64) (*model.Order, error) {
+	f.shipCalled = true
+	return f.shipFn(ctx, id)
 }
 
 func (f *fakeRepo) Pay(ctx context.Context, id int64) (*model.Order, error) {
@@ -300,6 +291,72 @@ func TestService_Cancel(t *testing.T) {
 			}
 			if repo.cancelCalled != tt.callsCancel {
 				t.Errorf("Cancel вызван = %v, want %v", repo.cancelCalled, tt.callsCancel)
+			}
+		})
+	}
+}
+
+func TestService_Ship(t *testing.T) {
+	tests := []struct {
+		name           string
+		sellerID       int64
+		order          *model.OrderDetail
+		sellerOrderErr error
+		shipErr        error
+		wantErr        error
+		callsShip      bool
+	}{
+		{
+			name:      "успешная отгрузка своим товаром в заказе",
+			sellerID:  3,
+			order:     &model.OrderDetail{Order: model.Order{ID: 1, UserID: 7, Status: model.OrderStatusPaid}},
+			callsShip: true,
+		},
+		{
+			name:           "заказ без товаров этого продавца — 404, Ship не вызывается",
+			sellerID:       999,
+			sellerOrderErr: model.ErrNotFound,
+			wantErr:        model.ErrNotFound,
+			callsShip:      false,
+		},
+		{
+			name:      "заказ не оплачен — 400 из репозитория",
+			sellerID:  3,
+			order:     &model.OrderDetail{Order: model.Order{ID: 1, UserID: 7, Status: model.OrderStatusNew}},
+			shipErr:   model.ErrInvalid,
+			wantErr:   model.ErrInvalid,
+			callsShip: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &fakeRepo{
+				getSellerOrderFn: func(context.Context, int64, int64) (*model.OrderDetail, error) {
+					if tt.sellerOrderErr != nil {
+						return nil, tt.sellerOrderErr
+					}
+					return tt.order, nil
+				},
+				shipFn: func(context.Context, int64) (*model.Order, error) {
+					if tt.shipErr != nil {
+						return nil, tt.shipErr
+					}
+					return &model.Order{ID: 1, Status: model.OrderStatusShipped}, nil
+				},
+			}
+
+			_, err := NewService(repo).Ship(context.Background(), tt.sellerID, 1)
+
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tt.wantErr)
+				}
+			} else if err != nil {
+				t.Fatalf("неожиданная ошибка: %v", err)
+			}
+			if repo.shipCalled != tt.callsShip {
+				t.Errorf("Ship вызван = %v, want %v", repo.shipCalled, tt.callsShip)
 			}
 		})
 	}
