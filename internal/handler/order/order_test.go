@@ -24,8 +24,8 @@ type fakeRepo struct {
 	getByIDFn          func(ctx context.Context, id int64) (*model.Order, error)
 	updateStatusFn     func(ctx context.Context, id int64, status string) error
 	getSellerOrderFn   func(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error)
-	payFn        func(ctx context.Context, id int64) (*model.Order, error)
-	cancelFn     func(ctx context.Context, id int64) (*model.Order, error)
+	payFn              func(ctx context.Context, id int64) (*model.Order, error)
+	cancelFn           func(ctx context.Context, id int64) (*model.Order, error)
 }
 
 func (f *fakeRepo) PlaceOrder(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error) {
@@ -72,6 +72,8 @@ func (f *fakeRepo) GetSellerOrder(ctx context.Context, sellerID int64, orderID i
 		return nil, model.ErrNotFound
 	}
 	return f.getSellerOrderFn(ctx, sellerID, orderID)
+}
+
 func (f *fakeRepo) Pay(ctx context.Context, id int64) (*model.Order, error) {
 	if f.payFn == nil {
 		return nil, model.ErrInvalid

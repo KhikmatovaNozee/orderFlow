@@ -78,6 +78,8 @@ func (s *Service) ListSellerOrders(ctx context.Context, sellerID int64, f model.
 
 func (s *Service) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error) {
 	return s.repo.GetSellerOrder(ctx, sellerID, orderID)
+}
+
 func (s *Service) Pay(ctx context.Context, userID, orderID int64) (*model.Order, error) {
 	detail, err := s.repo.GetDetail(ctx, orderID)
 	if err != nil {

@@ -272,6 +272,8 @@ func (r *Repo) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64
 		return nil, model.ErrNotFound
 	}
 	return &detail, nil
+}
+
 func (r *Repo) Pay(ctx context.Context, id int64) (*model.Order, error) {
 	var o model.Order
 	err := r.pool.QueryRow(ctx,
