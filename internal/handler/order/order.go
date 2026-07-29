@@ -97,7 +97,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	orderID, err := parseOrderID(c)
 	if err != nil {
 		respond.Fail(c, http.StatusBadRequest, "invalid order id")
 		return
@@ -110,6 +110,54 @@ func (h *Handler) Get(c *gin.Context) {
 	}
 
 	respond.JSON(c, http.StatusOK, detail)
+}
+
+func (h *Handler) Pay(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	orderID, err := parseOrderID(c)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, "invalid order id")
+		return
+	}
+
+	order, err := h.service.Pay(c.Request.Context(), userID, orderID)
+	if err != nil {
+		respond.Error(c, err)
+		return
+	}
+
+	respond.JSON(c, http.StatusOK, order)
+}
+
+func (h *Handler) Cancel(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	orderID, err := parseOrderID(c)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, "invalid order id")
+		return
+	}
+
+	order, err := h.service.Cancel(c.Request.Context(), userID, orderID)
+	if err != nil {
+		respond.Error(c, err)
+		return
+	}
+
+	respond.JSON(c, http.StatusOK, order)
+}
+
+func parseOrderID(c *gin.Context) (int64, error) {
+	return strconv.ParseInt(c.Param("id"), 10, 64)
 }
 
 func parseOrderFilter(c *gin.Context) (model.OrderFilter, error) {

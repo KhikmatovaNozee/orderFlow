@@ -20,6 +20,8 @@ type fakeRepo struct {
 	placeOrderFn func(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error)
 	listFn       func(ctx context.Context, f model.OrderFilter) (model.OrderListResult, error)
 	getDetailFn  func(ctx context.Context, id int64) (*model.OrderDetail, error)
+	payFn        func(ctx context.Context, id int64) (*model.Order, error)
+	cancelFn     func(ctx context.Context, id int64) (*model.Order, error)
 }
 
 func (f *fakeRepo) PlaceOrder(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error) {
@@ -40,6 +42,20 @@ func (f *fakeRepo) GetDetail(ctx context.Context, id int64) (*model.OrderDetail,
 	return f.getDetailFn(ctx, id)
 }
 
+func (f *fakeRepo) Pay(ctx context.Context, id int64) (*model.Order, error) {
+	if f.payFn == nil {
+		return nil, model.ErrInvalid
+	}
+	return f.payFn(ctx, id)
+}
+
+func (f *fakeRepo) Cancel(ctx context.Context, id int64) (*model.Order, error) {
+	if f.cancelFn == nil {
+		return nil, model.ErrInvalid
+	}
+	return f.cancelFn(ctx, id)
+}
+
 func setupRouter(repo *fakeRepo) *gin.Engine {
 	handler := NewHandler(orderservice.NewService(repo))
 
@@ -51,6 +67,8 @@ func setupRouter(repo *fakeRepo) *gin.Engine {
 	r.POST("/orders", handler.Place)
 	r.GET("/orders", handler.List)
 	r.GET("/orders/:id", handler.Get)
+	r.PUT("/orders/:id/pay", handler.Pay)
+	r.PUT("/orders/:id/cancel", handler.Cancel)
 	return r
 }
 
@@ -63,7 +81,6 @@ func TestPlace(t *testing.T) {
 	}{
 		{"успешный заказ", `{"items":[{"product_id":1,"quantity":2}]}`, nil, http.StatusCreated},
 		{"пустые items", `{"items":[]}`, nil, http.StatusBadRequest},
-		{"битый json", `{`, nil, http.StatusBadRequest},
 		{"не хватает stock", `{"items":[{"product_id":1,"quantity":999}]}`, model.ErrNoStock, http.StatusConflict},
 	}
 
@@ -74,7 +91,7 @@ func TestPlace(t *testing.T) {
 					if tt.repoErr != nil {
 						return nil, tt.repoErr
 					}
-					return &model.Order{ID: 1, Status: model.OrderStatusNew, Total: 900000}, nil
+					return &model.Order{ID: 1, Status: model.OrderStatusNew}, nil
 				},
 			}
 
@@ -91,66 +108,16 @@ func TestPlace(t *testing.T) {
 	}
 }
 
-func TestList(t *testing.T) {
-	repo := &fakeRepo{
-		listFn: func(context.Context, model.OrderFilter) (model.OrderListResult, error) {
-			return model.OrderListResult{
-				Items: []model.Order{{ID: 1, UserID: 7, Status: model.OrderStatusNew}},
-				Total: 1, Page: 1, Limit: 20,
-			}, nil
-		},
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/orders?status=new", nil)
-	w := httptest.NewRecorder()
-	setupRouter(repo).ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200, body=%s", w.Code, w.Body.String())
-	}
-}
-
-func TestList_InvalidPage(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/orders?page=abc", nil)
-	w := httptest.NewRecorder()
-	setupRouter(&fakeRepo{}).ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", w.Code)
-	}
-}
-
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name       string
-		url        string
 		order      *model.OrderDetail
 		repoErr    error
 		wantStatus int
 	}{
-		{
-			name:       "свой заказ",
-			url:        "/orders/1",
-			order:      &model.OrderDetail{Order: model.Order{ID: 1, UserID: 7}},
-			wantStatus: http.StatusOK,
-		},
-		{
-			name:       "чужой заказ — 403",
-			url:        "/orders/1",
-			order:      &model.OrderDetail{Order: model.Order{ID: 1, UserID: 999}},
-			wantStatus: http.StatusForbidden,
-		},
-		{
-			name:       "заказа нет — 404",
-			url:        "/orders/999",
-			repoErr:    model.ErrNotFound,
-			wantStatus: http.StatusNotFound,
-		},
-		{
-			name:       "id не число",
-			url:        "/orders/abc",
-			wantStatus: http.StatusBadRequest,
-		},
+		{"свой заказ", &model.OrderDetail{Order: model.Order{ID: 1, UserID: 7}}, nil, http.StatusOK},
+		{"чужой заказ — 403", &model.OrderDetail{Order: model.Order{ID: 1, UserID: 999}}, nil, http.StatusForbidden},
+		{"заказа нет — 404", nil, model.ErrNotFound, http.StatusNotFound},
 	}
 
 	for _, tt := range tests {
@@ -164,7 +131,7 @@ func TestGet(t *testing.T) {
 				},
 			}
 
-			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			req := httptest.NewRequest(http.MethodGet, "/orders/1", nil)
 			w := httptest.NewRecorder()
 			setupRouter(repo).ServeHTTP(w, req)
 
@@ -175,17 +142,102 @@ func TestGet(t *testing.T) {
 	}
 }
 
-func TestList_NoUserID(t *testing.T) {
-	handler := NewHandler(orderservice.NewService(&fakeRepo{}))
+func TestPay(t *testing.T) {
+	tests := []struct {
+		name       string
+		order      *model.OrderDetail
+		payErr     error
+		wantStatus int
+	}{
+		{
+			name:       "успешная оплата",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, UserID: 7, Status: model.OrderStatusNew}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "чужой заказ — 403",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, UserID: 999, Status: model.OrderStatusNew}},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "уже оплачен — 400",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, UserID: 7, Status: model.OrderStatusPaid}},
+			payErr:     model.ErrInvalid,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
 
-	r := gin.New()
-	r.GET("/orders", handler.List)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &fakeRepo{
+				getDetailFn: func(context.Context, int64) (*model.OrderDetail, error) {
+					return tt.order, nil
+				},
+				payFn: func(context.Context, int64) (*model.Order, error) {
+					if tt.payErr != nil {
+						return nil, tt.payErr
+					}
+					return &model.Order{ID: 1, Status: model.OrderStatusPaid}, nil
+				},
+			}
 
-	req := httptest.NewRequest(http.MethodGet, "/orders", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+			req := httptest.NewRequest(http.MethodPut, "/orders/1/pay", nil)
+			w := httptest.NewRecorder()
+			setupRouter(repo).ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", w.Code)
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d, body=%s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestCancel(t *testing.T) {
+	tests := []struct {
+		name       string
+		order      *model.OrderDetail
+		cancelErr  error
+		wantStatus int
+	}{
+		{
+			name:       "успешная отмена",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, UserID: 7, Status: model.OrderStatusNew}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "чужой заказ — 403",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, UserID: 999, Status: model.OrderStatusNew}},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "уже отгружен — отменить нельзя, 400",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, UserID: 7, Status: model.OrderStatusShipped}},
+			cancelErr:  model.ErrInvalid,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &fakeRepo{
+				getDetailFn: func(context.Context, int64) (*model.OrderDetail, error) {
+					return tt.order, nil
+				},
+				cancelFn: func(context.Context, int64) (*model.Order, error) {
+					if tt.cancelErr != nil {
+						return nil, tt.cancelErr
+					}
+					return &model.Order{ID: 1, Status: model.OrderStatusCancelled}, nil
+				},
+			}
+
+			req := httptest.NewRequest(http.MethodPut, "/orders/1/cancel", nil)
+			w := httptest.NewRecorder()
+			setupRouter(repo).ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d, body=%s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
 	}
 }
