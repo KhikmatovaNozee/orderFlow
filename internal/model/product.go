@@ -37,3 +37,18 @@ type ProductListResult struct {
 	Page  int
 	Limit int
 }
+
+type CreateProductInput struct {
+	Name     string
+	Category string
+	Price    int64
+	Stock    int64
+}
+
+type UpdateProductInput struct {
+	Name     *string
+	Category *string
+	Price    *int64
+	Stock    *int64
+	Status   *string
+}

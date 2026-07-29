@@ -9,6 +9,8 @@ func TestNew(t *testing.T) {
 	engine := New(slog.Default(), nil, nil, nil, nil, nil)
 
 	want := []string{
+		"GET /uploads/*filepath",
+		"HEAD /uploads/*filepath",
 		"GET /health",
 		"POST /api/v1/auth/register",
 		"POST /api/v1/auth/login",
@@ -21,6 +23,10 @@ func TestNew(t *testing.T) {
 		"GET /api/v1/orders",
 		"GET /api/v1/orders/:id",
 		"GET /api/v1/manage/test",
+		"POST /api/v1/manage/products",
+		"PUT /api/v1/manage/products/:id",
+		"DELETE /api/v1/manage/products/:id",
+		"POST /api/v1/manage/products/:id/photo",
 	}
 
 	registered := make(map[string]bool)
