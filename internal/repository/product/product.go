@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultLimit = 20
-	maxLimit = 100
+	maxLimit     = 100
 )
 
 type Repo struct {
@@ -126,4 +126,36 @@ func (r *Repo) GetByID(ctx context.Context, id int64) (*model.Product, error) {
 		return nil, fmt.Errorf("get product: %w", err)
 	}
 	return &p, nil
+}
+
+func (r *Repo) Create(ctx context.Context, p model.Product) (model.Product, error) {
+	const q = `INSERT INTO products (seller_id, name, category, price, stock, status, photo_path)
+	           VALUES ($1, $2, $3, $4, $5, $6, $7)
+	           RETURNING id, created_at, updated_at`
+
+	err := r.pool.QueryRow(ctx, q,
+		p.SellerID, p.Name, p.Category, p.Price, p.Stock, p.Status, p.PhotoPath,
+	).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return model.Product{}, fmt.Errorf("create product: %w", err)
+	}
+	return p, nil
+}
+
+func (r *Repo) Update(ctx context.Context, p model.Product) (model.Product, error) {
+	const q = `UPDATE products
+	           SET name = $1, category = $2, price = $3, stock = $4, status = $5, photo_path = $6, updated_at = now()
+	           WHERE id = $7
+	           RETURNING updated_at`
+
+	err := r.pool.QueryRow(ctx, q,
+		p.Name, p.Category, p.Price, p.Stock, p.Status, p.PhotoPath, p.ID,
+	).Scan(&p.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.Product{}, model.ErrNotFound
+		}
+		return model.Product{}, fmt.Errorf("update product: %w", err)
+	}
+	return p, nil
 }

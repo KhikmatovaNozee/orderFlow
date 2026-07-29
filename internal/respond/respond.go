@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/KhikmatovaNozee/orderFlow/internal/logger"
 	"github.com/KhikmatovaNozee/orderFlow/internal/model"
 	"github.com/gin-gonic/gin"
 )
@@ -35,9 +36,11 @@ func JSON(c *gin.Context, code int, data any) {
 
 func Error(c *gin.Context, err error) {
 	status, message := resolve(err)
+	if status == http.StatusInternalServerError {
+		logger.From(c.Request.Context()).Error("unhandled error", "error", err, "path", c.Request.URL.Path)
+	}
 	Fail(c, status, message)
 }
-
 func ErrorWithMessage(c *gin.Context, err error, message string) {
 	status, safeMessage := resolve(err)
 	if status == http.StatusInternalServerError {
