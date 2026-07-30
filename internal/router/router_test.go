@@ -6,7 +6,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	engine := New(slog.Default(), nil, nil, nil, nil, nil)
+	engine := New(slog.Default(), nil, nil, nil, nil, nil, nil)
 
 	want := []string{
 		"GET /uploads/*filepath",
@@ -32,6 +32,7 @@ func TestNew(t *testing.T) {
 		"PUT /api/v1/manage/orders/:id/ship",
 		"GET /api/v1/manage/orders",
 		"GET /api/v1/manage/orders/:id",
+		"GET /api/v1/manage/stats",
 	}
 
 	registered := make(map[string]bool)
