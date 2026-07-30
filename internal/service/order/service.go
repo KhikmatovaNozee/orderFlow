@@ -14,7 +14,7 @@ type Repository interface {
 	GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error)
 	Pay(ctx context.Context, id int64) (*model.Order, error)
 	Cancel(ctx context.Context, id int64) (*model.Order, error)
-	Ship(ctx context.Context, id int64) (*model.Order, error)
+	Ship(ctx context.Context, id int64, tracking string) (*model.Order, error)
 }
 
 type Service struct {
@@ -84,9 +84,12 @@ func (s *Service) Cancel(ctx context.Context, userID, orderID int64) (*model.Ord
 	return s.repo.Cancel(ctx, orderID)
 }
 
-func (s *Service) Ship(ctx context.Context, sellerID, orderID int64) (*model.Order, error) {
+func (s *Service) Ship(ctx context.Context, sellerID, orderID int64, tracking string) (*model.Order, error) {
 	if _, err := s.repo.GetSellerOrder(ctx, sellerID, orderID); err != nil {
 		return nil, err
 	}
-	return s.repo.Ship(ctx, orderID)
+	if tracking == "" {
+		return nil, model.ErrInvalid
+	}
+	return s.repo.Ship(ctx, orderID, tracking)
 }

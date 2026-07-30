@@ -24,7 +24,7 @@ type fakeRepo struct {
 	getSellerOrderFn   func(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error)
 	payFn              func(ctx context.Context, id int64) (*model.Order, error)
 	cancelFn           func(ctx context.Context, id int64) (*model.Order, error)
-	shipFn             func(ctx context.Context, id int64) (*model.Order, error)
+	shipFn             func(ctx context.Context, id int64, tracking string) (*model.Order, error)
 }
 
 func (f *fakeRepo) PlaceOrder(ctx context.Context, userID int64, items []model.OrderLineInput) (*model.Order, error) {
@@ -59,11 +59,11 @@ func (f *fakeRepo) GetSellerOrder(ctx context.Context, sellerID int64, orderID i
 	return f.getSellerOrderFn(ctx, sellerID, orderID)
 }
 
-func (f *fakeRepo) Ship(ctx context.Context, id int64) (*model.Order, error) {
+func (f *fakeRepo) Ship(ctx context.Context, id int64, tracking string) (*model.Order, error) {
 	if f.shipFn == nil {
 		return nil, model.ErrInvalid
 	}
-	return f.shipFn(ctx, id)
+	return f.shipFn(ctx, id, tracking)
 }
 
 func (f *fakeRepo) Pay(ctx context.Context, id int64) (*model.Order, error) {
@@ -302,15 +302,21 @@ func TestShip(t *testing.T) {
 					}
 					return tt.order, nil
 				},
-				shipFn: func(context.Context, int64) (*model.Order, error) {
+				shipFn: func(context.Context, int64, string) (*model.Order, error) {
 					if tt.shipErr != nil {
 						return nil, tt.shipErr
 					}
-					return &model.Order{ID: 1, Status: model.OrderStatusShipped}, nil
+					return &model.Order{
+						ID:     1,
+						Status: model.OrderStatusShipped,
+					}, nil
 				},
 			}
 
-			req := httptest.NewRequest(http.MethodPut, "/manage/orders/1/ship", nil)
+			req := httptest.NewRequest(
+				http.MethodPut, "/manage/orders/1/ship", strings.NewReader(`{"tracking":"TRACK123"}`))
+			req.Header.Set("Content-Type", "application/json")
+
 			w := httptest.NewRecorder()
 			setupRouter(repo).ServeHTTP(w, req)
 

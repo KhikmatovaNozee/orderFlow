@@ -14,6 +14,7 @@ type Order struct {
 	UserID    int64     `json:"user_id"`
 	Status    string    `json:"status"`
 	Total     int64     `json:"total"`
+	Tracking  string    `json:"tracking"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -247,13 +247,13 @@ func (r *Repo) ListSellerOrders(ctx context.Context, sellerID int64, f model.Ord
 	}, nil
 }
 
-func (r *Repo) Ship(ctx context.Context, id int64) (*model.Order, error) {
+func (r *Repo) Ship(ctx context.Context, id int64, tracking string) (*model.Order, error) {
 	var o model.Order
-	err := r.pool.QueryRow(ctx,
-		`UPDATE orders SET status = $1 WHERE id = $2 AND status = $3
-		 RETURNING id, user_id, status, total, created_at`,
-		model.OrderStatusShipped, id, model.OrderStatusPaid,
-	).Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.CreatedAt)
+	err := r.pool.QueryRow(ctx, `UPDATE orders SET status = $1, tracking = $2 
+              WHERE id = $3 AND status = $4 RETURNING id, user_id, status, total, tracking, created_at`,
+		model.OrderStatusShipped, tracking, id, model.OrderStatusPaid,
+	).Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.Tracking, &o.CreatedAt)
+
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, model.ErrInvalid

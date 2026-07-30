@@ -53,7 +53,7 @@ Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
-  "name": "Наушники",
+  "name": "Айфон",
   "category": "electronics",
   "price": 150000,
   "stock": 10
@@ -269,7 +269,9 @@ GET http://localhost:8080/api/v1/manage/orders
 Authorization: Bearer {{seller_access_token}}
 
 
-###
+### Pay order
+PUT http://localhost:8080/api/v1/orders/2/pay
+Authorization: Bearer {{user_access_token}}
 
 ### Seller получает детали заказа
 GET http://localhost:8080/api/v1/manage/orders/{{order_id}}
@@ -281,6 +283,11 @@ Authorization: Bearer {{seller_access_token}}
 ### Seller отправляет заказ (ship)
 PUT http://localhost:8080/api/v1/manage/orders/{{order_id}}/ship
 Authorization: Bearer {{seller_access_token}}
+Content-Type: application/json
+
+{
+  "tracking": "UZ123456789"
+}
 
 
 ###
@@ -295,4 +302,105 @@ Authorization: Bearer {{seller_access_token}}
 
 ###
 GET http://localhost:8080/api/v1/manage/orders/1
+Authorization: Bearer {{seller_access_token}}
+
+
+### ==================== B-04 Seller управление заказами ====================
+
+
+### 1. Login seller (получаем свежий seller token)
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "seller1",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("seller_access_token", response.body.access_token);
+%}
+
+
+### 2. Проверяем, что seller имеет доступ
+GET http://localhost:8080/api/v1/manage/test
+Authorization: Bearer {{seller_access_token}}
+
+
+### 3. Seller смотрит свои заказы
+GET http://localhost:8080/api/v1/manage/orders
+Authorization: Bearer {{seller_access_token}}
+
+
+### 4. Получить детали заказа
+### если твой заказ другой, поменяй ID
+GET http://localhost:8080/api/v1/manage/orders/{{order_id}}
+Authorization: Bearer {{seller_access_token}}
+
+
+### 5. Login user (чтобы оплатить заказ)
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "sevara",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("user_access_token", response.body.access_token);
+%}
+
+
+### 6. User оплачивает заказ
+PUT http://localhost:8080/api/v1/orders/{{order_id}}/pay
+Authorization: Bearer {{user_access_token}}
+
+
+### 7. Проверяем, что заказ стал paid
+GET http://localhost:8080/api/v1/manage/orders/{{order_id}}
+Authorization: Bearer {{seller_access_token}}
+
+
+### 8. Снова Login seller (обновляем токен)
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "seller1",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("seller_access_token", response.body.access_token);
+%}
+
+
+### 9. Seller отправляет заказ (ship)
+PUT http://localhost:8080/api/v1/manage/orders/{{order_id}}/ship
+Authorization: Bearer {{seller_access_token}}
+Content-Type: application/json
+
+{
+  "tracking": "UZ123456789"
+}
+
+
+### 10. Проверяем, что заказ стал shipped
+GET http://localhost:8080/api/v1/manage/orders/{{order_id}}
+Authorization: Bearer {{seller_access_token}}
+
+
+### 11. Повторная отправка shipped заказа (должно быть 400)
+PUT http://localhost:8080/api/v1/manage/orders/{{order_id}}/ship
+Authorization: Bearer {{seller_access_token}}
+Content-Type: application/json
+
+{
+  "tracking": "UZ999999999"
+}
+
+
+### 12. Проверяем seller не может видеть чужие заказы
+GET http://localhost:8080/api/v1/manage/orders/999999
 Authorization: Bearer {{seller_access_token}}

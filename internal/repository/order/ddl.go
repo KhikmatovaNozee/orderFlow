@@ -13,6 +13,7 @@ const ddlOrder = `create table if not exists orders(
     status varchar(50) not null default 'new'
         check (status in ('new', 'paid', 'shipped', 'cancelled')),
     total bigint not null default 0,
+    tracking varchar(255),
     created_at timestamp with time zone not null default now()
 )`
 
