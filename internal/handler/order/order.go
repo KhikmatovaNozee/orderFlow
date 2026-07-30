@@ -15,6 +15,10 @@ type Handler struct {
 	service *orderservice.Service
 }
 
+type shipOrderRequest struct {
+	Tracking string `json:"tracking"`
+}
+
 func NewHandler(service *orderservice.Service) *Handler {
 	return &Handler{service: service}
 }
@@ -244,18 +248,25 @@ func (h *Handler) Ship(c *gin.Context) {
 		respond.Fail(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-
 	orderID, err := parseOrderID(c)
 	if err != nil {
 		respond.Fail(c, http.StatusBadRequest, "invalid order id")
 		return
 	}
+	var req shipOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond.Fail(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Tracking == "" {
+		respond.Fail(c, http.StatusBadRequest, "tracking is required")
+		return
+	}
 
-	order, err := h.service.Ship(c.Request.Context(), sellerID, orderID)
+	order, err := h.service.Ship(c.Request.Context(), sellerID, orderID, req.Tracking)
 	if err != nil {
 		respond.Error(c, err)
 		return
 	}
-
 	respond.JSON(c, http.StatusOK, order)
 }

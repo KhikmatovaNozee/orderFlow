@@ -17,7 +17,7 @@ type fakeRepo struct {
 	gotFilter          model.OrderFilter
 	payFn              func(ctx context.Context, id int64) (*model.Order, error)
 	cancelFn           func(ctx context.Context, id int64) (*model.Order, error)
-	shipFn             func(ctx context.Context, id int64) (*model.Order, error)
+	shipFn             func(ctx context.Context, id int64, tracking string) (*model.Order, error)
 	payCalled          bool
 	cancelCalled       bool
 	shipCalled         bool
@@ -42,16 +42,10 @@ func (f *fakeRepo) GetDetail(ctx context.Context, id int64) (*model.OrderDetail,
 	return f.getDetailFn(ctx, id)
 }
 
-func (f *fakeRepo) ListSellerOrders(
-	ctx context.Context,
-	sellerID int64,
-	filter model.OrderFilter,
-) (model.OrderListResult, error) {
-
+func (f *fakeRepo) ListSellerOrders(ctx context.Context, sellerID int64, filter model.OrderFilter) (model.OrderListResult, error) {
 	if f.listSellerOrdersFn == nil {
 		return model.OrderListResult{}, nil
 	}
-
 	return f.listSellerOrdersFn(ctx, sellerID, filter)
 }
 
@@ -62,9 +56,12 @@ func (f *fakeRepo) GetSellerOrder(ctx context.Context, sellerID int64, orderID i
 	return f.getSellerOrderFn(ctx, sellerID, orderID)
 }
 
-func (f *fakeRepo) Ship(ctx context.Context, id int64) (*model.Order, error) {
+func (f *fakeRepo) Ship(ctx context.Context, id int64, tracking string) (*model.Order, error) {
 	f.shipCalled = true
-	return f.shipFn(ctx, id)
+	if f.shipFn == nil {
+		return nil, model.ErrInvalid
+	}
+	return f.shipFn(ctx, id, tracking)
 }
 
 func (f *fakeRepo) Pay(ctx context.Context, id int64) (*model.Order, error) {
@@ -338,15 +335,18 @@ func TestService_Ship(t *testing.T) {
 					}
 					return tt.order, nil
 				},
-				shipFn: func(context.Context, int64) (*model.Order, error) {
+				shipFn: func(context.Context, int64, string) (*model.Order, error) {
 					if tt.shipErr != nil {
 						return nil, tt.shipErr
 					}
-					return &model.Order{ID: 1, Status: model.OrderStatusShipped}, nil
+					return &model.Order{
+						ID:     1,
+						Status: model.OrderStatusShipped,
+					}, nil
 				},
 			}
 
-			_, err := NewService(repo).Ship(context.Background(), tt.sellerID, 1)
+			_, err := NewService(repo).Ship(context.Background(), tt.sellerID, 1, "TRACK123")
 
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
