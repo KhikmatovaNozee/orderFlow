@@ -93,6 +93,8 @@ func setupRouter(repo *fakeRepo) *gin.Engine {
 	r.GET("/orders/:id", handler.Get)
 	r.PUT("/orders/:id/pay", handler.Pay)
 	r.PUT("/orders/:id/cancel", handler.Cancel)
+	r.GET("/manage/orders", handler.ListSellerOrders)
+	r.GET("/manage/orders/:id", handler.GetSellerOrder)
 	r.PUT("/manage/orders/:id/ship", handler.Ship)
 	return r
 }
@@ -322,6 +324,189 @@ func TestShip(t *testing.T) {
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d, body=%s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func setupRouterNoAuth(repo *fakeRepo) *gin.Engine {
+	handler := NewHandler(orderservice.NewService(repo))
+
+	r := gin.New()
+	r.POST("/orders", handler.Place)
+	r.GET("/orders", handler.List)
+	r.GET("/orders/:id", handler.Get)
+	r.PUT("/orders/:id/pay", handler.Pay)
+	r.PUT("/orders/:id/cancel", handler.Cancel)
+	r.GET("/manage/orders", handler.ListSellerOrders)
+	r.GET("/manage/orders/:id", handler.GetSellerOrder)
+	r.PUT("/manage/orders/:id/ship", handler.Ship)
+	return r
+}
+
+func TestList(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		listFn     func(context.Context, model.OrderFilter) (model.OrderListResult, error)
+		wantStatus int
+	}{
+		{
+			name: "успешный список",
+			url:  "/orders",
+			listFn: func(context.Context, model.OrderFilter) (model.OrderListResult, error) {
+				return model.OrderListResult{
+					Items: []model.Order{{ID: 1, UserID: 7, Status: model.OrderStatusNew}},
+					Total: 1, Page: 1, Limit: 20,
+				}, nil
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "фильтр по статусу",
+			url:        "/orders?status=new&page=1&limit=10",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "невалидный page — 400",
+			url:        "/orders?page=abc",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "невалидный limit — 400",
+			url:        "/orders?limit=abc",
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupRouter(&fakeRepo{listFn: tt.listFn})
+
+			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d, body=%s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestListSellerOrders(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		listFn     func(context.Context, int64, model.OrderFilter) (model.OrderListResult, error)
+		wantStatus int
+	}{
+		{
+			name: "успешный список заказов продавца",
+			url:  "/manage/orders",
+			listFn: func(context.Context, int64, model.OrderFilter) (model.OrderListResult, error) {
+				return model.OrderListResult{
+					Items: []model.Order{{ID: 1, Status: model.OrderStatusPaid}},
+					Total: 1, Page: 1, Limit: 20,
+				}, nil
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "фильтр по статусу",
+			url:        "/manage/orders?status=paid",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "невалидный page — 400",
+			url:        "/manage/orders?page=abc",
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupRouter(&fakeRepo{listSellerOrdersFn: tt.listFn})
+
+			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d, body=%s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestGetSellerOrder(t *testing.T) {
+	tests := []struct {
+		name       string
+		order      *model.OrderDetail
+		repoErr    error
+		wantStatus int
+	}{
+		{
+			name:       "заказ с товаром этого продавца",
+			order:      &model.OrderDetail{Order: model.Order{ID: 1, Status: model.OrderStatusPaid}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "заказ без товаров этого продавца — 404",
+			repoErr:    model.ErrNotFound,
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &fakeRepo{
+				getSellerOrderFn: func(context.Context, int64, int64) (*model.OrderDetail, error) {
+					if tt.repoErr != nil {
+						return nil, tt.repoErr
+					}
+					return tt.order, nil
+				},
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/manage/orders/1", nil)
+			w := httptest.NewRecorder()
+			setupRouter(repo).ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d, body=%s", w.Code, tt.wantStatus, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestUnauthorized(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		url    string
+		body   string
+	}{
+		{"Place", http.MethodPost, "/orders", `{"items":[{"product_id":1,"quantity":1}]}`},
+		{"List", http.MethodGet, "/orders", ""},
+		{"Get", http.MethodGet, "/orders/1", ""},
+		{"Pay", http.MethodPut, "/orders/1/pay", ""},
+		{"Cancel", http.MethodPut, "/orders/1/cancel", ""},
+		{"ListSellerOrders", http.MethodGet, "/manage/orders", ""},
+		{"GetSellerOrder", http.MethodGet, "/manage/orders/1", ""},
+		{"Ship", http.MethodPut, "/manage/orders/1/ship", `{"tracking":"T1"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.url, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+			setupRouterNoAuth(&fakeRepo{}).ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnauthorized {
+				t.Errorf("status = %d, want 401, body=%s", w.Code, w.Body.String())
 			}
 		})
 	}

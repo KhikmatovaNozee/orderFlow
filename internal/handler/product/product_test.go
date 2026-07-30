@@ -23,9 +23,11 @@ type fakeRepo struct {
 	getByIDFn func(ctx context.Context, id int64) (*model.Product, error)
 	createFn  func(ctx context.Context, p model.Product) (model.Product, error)
 	updateFn  func(ctx context.Context, p model.Product) (model.Product, error)
+	gotFilter model.ProductFilter
 }
 
 func (f *fakeRepo) List(ctx context.Context, filter model.ProductFilter) (model.ProductListResult, error) {
+	f.gotFilter = filter
 	if f.listFn == nil {
 		return model.ProductListResult{}, nil
 	}
@@ -62,8 +64,6 @@ func setupRouter(repo *fakeRepo) *gin.Engine {
 	return r
 }
 
-// setupManageRouter поднимает роуты продавца и подставляет user_id в контекст,
-// имитируя то, что в проде делает middleware.Auth после проверки JWT.
 func setupManageRouter(repo *fakeRepo, sellerID int64) *gin.Engine {
 	handler := NewHandler(productservice.NewService(repo))
 
@@ -73,6 +73,7 @@ func setupManageRouter(repo *fakeRepo, sellerID int64) *gin.Engine {
 		c.Next()
 	})
 	r.POST("/manage/products", handler.Create)
+	r.GET("/manage/products", handler.ListMine)
 	r.PUT("/manage/products/:id", handler.Update)
 	r.DELETE("/manage/products/:id", handler.Delete)
 	r.POST("/manage/products/:id/photo", handler.UploadPhoto)
@@ -414,4 +415,98 @@ func TestUploadPhoto(t *testing.T) {
 			t.Errorf("status = %d, want 403, body=%s", w.Code, w.Body.String())
 		}
 	})
+}
+
+func TestListMine(t *testing.T) {
+	repo := &fakeRepo{
+		listFn: func(context.Context, model.ProductFilter) (model.ProductListResult, error) {
+			return model.ProductListResult{
+				Items: []model.Product{{ID: 1, SellerID: 42, Name: "Наушники"}},
+				Total: 1, Page: 1, Limit: 20,
+			}, nil
+		},
+	}
+	r := setupManageRouter(repo, 42)
+
+	req := httptest.NewRequest(http.MethodGet, "/manage/products", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
+	}
+
+	if repo.gotFilter.SellerID == nil || *repo.gotFilter.SellerID != 42 {
+		t.Errorf("в репозиторий ушёл SellerID=%v, want 42", repo.gotFilter.SellerID)
+	}
+}
+
+func TestListMine_InvalidPriceRange(t *testing.T) {
+	r := setupManageRouter(&fakeRepo{}, 42)
+
+	req := httptest.NewRequest(http.MethodGet, "/manage/products?price_min=1000&price_max=100", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdate_InvalidStatus(t *testing.T) {
+	r := setupManageRouter(&fakeRepo{
+		getByIDFn: func(context.Context, int64) (*model.Product, error) {
+			return &model.Product{ID: 1, SellerID: 42}, nil
+		},
+	}, 42)
+
+	req := httptest.NewRequest(http.MethodPut, "/manage/products/1", bytes.NewBufferString(`{"status":"deleted"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDelete_NotFound(t *testing.T) {
+	r := setupManageRouter(&fakeRepo{
+		getByIDFn: func(context.Context, int64) (*model.Product, error) {
+			return nil, model.ErrNotFound
+		},
+	}, 42)
+
+	req := httptest.NewRequest(http.MethodDelete, "/manage/products/1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404, body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestUploadPhoto_TooLarge(t *testing.T) {
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	part, _ := w.CreateFormFile("photo", "big.jpg")
+	// Заголовок jpeg + добивка нулями сверх лимита в 5MB.
+	big := append([]byte{0xFF, 0xD8, 0xFF, 0xE0}, make([]byte, 5<<20+1)...)
+	_, _ = part.Write(big)
+	_ = w.Close()
+
+	r := setupManageRouter(&fakeRepo{
+		getByIDFn: func(context.Context, int64) (*model.Product, error) {
+			return &model.Product{ID: 1, SellerID: 42}, nil
+		},
+	}, 42)
+
+	req := httptest.NewRequest(http.MethodPost, "/manage/products/1/photo", body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400, body=%s", rec.Code, rec.Body.String())
+	}
 }
