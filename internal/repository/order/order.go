@@ -180,9 +180,9 @@ func (r *Repo) GetDetail(ctx context.Context, id int64) (*model.OrderDetail, err
 	var detail model.OrderDetail
 
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, user_id, status, total, created_at FROM orders WHERE id = $1`,
+		`SELECT id, user_id, status, total, COALESCE(tracking, ''), created_at FROM orders WHERE id = $1`,
 		id,
-	).Scan(&detail.ID, &detail.UserID, &detail.Status, &detail.Total, &detail.CreatedAt)
+	).Scan(&detail.ID, &detail.UserID, &detail.Status, &detail.Total, &detail.Tracking, &detail.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, model.ErrNotFound
@@ -293,13 +293,20 @@ func (r *Repo) Ship(ctx context.Context, id int64, tracking string) (*model.Orde
 }
 
 func (r *Repo) GetSellerOrder(ctx context.Context, sellerID int64, orderID int64) (*model.OrderDetail, error) {
-	const q = `SELECT o.id, o.user_id, o.status, o.total, o.created_at FROM orders o JOIN order_items oi ON oi.order_id = o.id
-    JOIN products p ON p.id = oi.product_id WHERE o.id=$1 AND p.seller_id=$2`
+	const q = `SELECT o.id, o.user_id, o.status, o.total, COALESCE(o.tracking, ''), o.created_at
+	           FROM orders o
+	           JOIN order_items oi ON oi.order_id = o.id
+	           JOIN products p ON p.id = oi.product_id
+	           WHERE o.id = $1 AND p.seller_id = $2`
 
 	var detail model.OrderDetail
-	err := r.pool.QueryRow(ctx, q, orderID, sellerID).Scan(&detail.ID, &detail.UserID, &detail.Status, &detail.Total, &detail.CreatedAt)
+	err := r.pool.QueryRow(ctx, q, orderID, sellerID).
+		Scan(&detail.ID, &detail.UserID, &detail.Status, &detail.Total, &detail.Tracking, &detail.CreatedAt)
 	if err != nil {
-		return nil, model.ErrNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, model.ErrNotFound
+		}
+		return nil, fmt.Errorf("get seller order: %w", err)
 	}
 	return &detail, nil
 }
