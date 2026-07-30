@@ -133,3 +133,14 @@ func (s *Service) UpdatePhoto(ctx context.Context, sellerID, id int64, path stri
 	p.PhotoPath = &path
 	return s.repo.Update(ctx, *p)
 }
+
+func (s *Service) ListMine(ctx context.Context, sellerID int64, f model.ProductFilter) (model.ProductListResult, error) {
+	if f.PriceMin != nil && f.PriceMax != nil && *f.PriceMin > *f.PriceMax {
+		return model.ProductListResult{}, model.ErrInvalid
+	}
+	if f.Status != nil && *f.Status != model.ProductStatusActive && *f.Status != model.ProductStatusHidden {
+		return model.ProductListResult{}, model.ErrInvalid
+	}
+	f.SellerID = &sellerID
+	return s.repo.List(ctx, f)
+}

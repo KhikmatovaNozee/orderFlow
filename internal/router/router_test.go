@@ -25,6 +25,7 @@ func TestNew(t *testing.T) {
 		"PUT /api/v1/orders/:id/pay",
 		"PUT /api/v1/orders/:id/cancel",
 		"GET /api/v1/manage/test",
+		"GET /api/v1/manage/products",
 		"POST /api/v1/manage/products",
 		"PUT /api/v1/manage/products/:id",
 		"DELETE /api/v1/manage/products/:id",
