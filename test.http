@@ -83,6 +83,7 @@ Authorization: Bearer {{access_token}}
 ###
 
 GET http://localhost:8080/health
+
 ### Login as user
 POST http://localhost:8080/api/v1/auth/login
 Content-Type: application/json
@@ -407,3 +408,28 @@ GET http://localhost:8080/api/v1/manage/orders/999999
 ### Seller статистика продаж
 GET http://localhost:8080/api/v1/manage/stats
 Authorization: Bearer {{seller_access_token}}
+
+### ==================== A-05: проверка поиска/пагинации ====================
+
+### Каталог: все параметры разом
+GET http://localhost:8080/api/v1/products?q=Наушники&category=electronics&price_min=100000&price_max=1000000&page=1&limit=5
+Authorization: Bearer {{user_access_token}}
+
+
+### Каталог: только пагинация, без фильтров — проверяем метаданные total/page/limit
+GET http://localhost:8080/api/v1/products?page=1&limit=2
+Authorization: Bearer {{user_access_token}}
+
+
+### Каталог: page=2 — должна прийти вторая страница (или пустая, если товаров < limit*2)
+GET http://localhost:8080/api/v1/products?page=2&limit=2
+Authorization: Bearer {{user_access_token}}
+
+
+### Мои заказы: статус + пагинация разом
+GET http://localhost:8080/api/v1/orders?status=new&page=1&limit=10
+Authorization: Bearer {{user_access_token}}
+
+### Мои заказы: несуществующий статус — просто пустой список, не ошибка
+GET http://localhost:8080/api/v1/orders?status=не_такой_статус
+Authorization: Bearer {{user_access_token}}
