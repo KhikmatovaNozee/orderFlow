@@ -215,36 +215,65 @@ func (r *Repo) GetDetail(ctx context.Context, id int64) (*model.OrderDetail, err
 }
 
 func (r *Repo) ListSellerOrders(ctx context.Context, sellerID int64, f model.OrderFilter) (model.OrderListResult, error) {
-	args := []any{sellerID}
-	query := `SELECT DISTINCT o.id, o.user_id, o.status, o.total, o.created_at FROM orders o JOIN order_items oi ON oi.order_id=o.id
-			JOIN products p ON p.id=oi.product_id WHERE p.seller_id=$1`
-
-	if f.Status != nil {
-		query += " AND o.status=$2"
-		args = append(args, *f.Status)
+	page := f.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := f.Limit
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
-	query += " ORDER BY o.id DESC"
-	rows, err := r.pool.Query(ctx, query, args...)
+	args := []any{sellerID}
+	where := "WHERE p.seller_id = $1"
+	if f.Status != nil {
+		args = append(args, *f.Status)
+		where += fmt.Sprintf(" AND o.status = $%d", len(args))
+	}
+
+	var total int
+	countQuery := fmt.Sprintf(
+		`SELECT count(DISTINCT o.id)
+		 FROM orders o
+		 JOIN order_items oi ON oi.order_id = o.id
+		 JOIN products p ON p.id = oi.product_id %s`, where)
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return model.OrderListResult{}, fmt.Errorf("count seller orders: %w", err)
+	}
+
+	offset := (page - 1) * limit
+	listArgs := append(append([]any{}, args...), limit, offset)
+	listQuery := fmt.Sprintf(
+		`SELECT DISTINCT o.id, o.user_id, o.status, o.total, o.created_at
+		 FROM orders o
+		 JOIN order_items oi ON oi.order_id = o.id
+		 JOIN products p ON p.id = oi.product_id %s
+		 ORDER BY o.id DESC
+		 LIMIT $%d OFFSET $%d`,
+		where, len(args)+1, len(args)+2,
+	)
+
+	rows, err := r.pool.Query(ctx, listQuery, listArgs...)
 	if err != nil {
-		return model.OrderListResult{}, err
+		return model.OrderListResult{}, fmt.Errorf("list seller orders: %w", err)
 	}
 	defer rows.Close()
 
-	items := make([]model.Order, 0)
+	items := make([]model.Order, 0, limit)
 	for rows.Next() {
 		var o model.Order
-		err := rows.Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.CreatedAt)
-		if err != nil {
-			return model.OrderListResult{}, err
+		if err := rows.Scan(&o.ID, &o.UserID, &o.Status, &o.Total, &o.CreatedAt); err != nil {
+			return model.OrderListResult{}, fmt.Errorf("scan seller order: %w", err)
 		}
 		items = append(items, o)
 	}
-
-	return model.OrderListResult{
-		Items: items,
-		Total: len(items),
-	}, nil
+	if err := rows.Err(); err != nil {
+		return model.OrderListResult{}, fmt.Errorf("iterate seller orders: %w", err)
+	}
+	return model.OrderListResult{Items: items, Total: total, Page: page, Limit: limit}, nil
 }
 
 func (r *Repo) Ship(ctx context.Context, id int64, tracking string) (*model.Order, error) {

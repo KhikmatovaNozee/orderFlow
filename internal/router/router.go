@@ -76,6 +76,7 @@ func New(
 		manage.GET("/orders/:id", orderHandler.GetSellerOrder)
 		manage.GET("/stats", statsHandler.Get)
 		manage.PUT("/orders/:id/ship", orderHandler.Ship)
+		manage.GET("/products", productHandler.ListMine)
 	}
 
 	return r

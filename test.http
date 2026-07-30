@@ -433,3 +433,115 @@ Authorization: Bearer {{user_access_token}}
 ### Мои заказы: несуществующий статус — просто пустой список, не ошибка
 GET http://localhost:8080/api/v1/orders?status=не_такой_статус
 Authorization: Bearer {{user_access_token}}
+
+
+### ==================== B-05: Seller управление товарами (photo + stock) ====================
+
+
+### 1. Login seller
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "seller1",
+  "password": "password123"
+}
+
+> {%
+    client.global.set("seller_access_token", response.body.access_token);
+%}
+
+
+### 2. Проверяем seller доступ
+GET http://localhost:8080/api/v1/manage/test
+Authorization: Bearer {{seller_access_token}}
+
+
+### 3. Создаем новый товар для проверки
+POST http://localhost:8080/api/v1/manage/products
+Authorization: Bearer {{seller_access_token}}
+Content-Type: application/json
+
+{
+  "name": "Айфон",
+  "category": "electronics",
+  "price": 800000,
+  "stock": 20
+}
+
+> {%
+    client.global.set("seller_product_id", response.body.id);
+%}
+
+
+### 4. Seller смотрит свои товары
+GET http://localhost:8080/api/v1/manage/products
+Authorization: Bearer {{seller_access_token}}
+
+
+### 5. Обновляем цену и stock товара
+PUT http://localhost:8080/api/v1/manage/products/{{seller_product_id}}
+Authorization: Bearer {{seller_access_token}}
+Content-Type: application/json
+
+{
+  "price": 750000,
+  "stock": 15
+}
+
+
+### 6. Проверяем обновленный товар
+GET http://localhost:8080/api/v1/products/{{seller_product_id}}
+Authorization: Bearer {{user_access_token}}
+
+
+### 7. Загружаем фото товара
+POST http://localhost:8080/api/v1/manage/products/{{seller_product_id}}/photo
+Authorization: Bearer {{seller_access_token}}
+Content-Type: multipart/form-data
+
+photo=@/Users/nozee/Downloads/test-image.jpeg
+
+
+### 8. Проверяем товар после добавления фото
+GET http://localhost:8080/api/v1/products/{{seller_product_id}}
+Authorization: Bearer {{user_access_token}}
+
+
+### 9. Проверка невалидного обновления цены
+### ожидаем 400
+PUT http://localhost:8080/api/v1/manage/products/{{seller_product_id}}
+Authorization: Bearer {{seller_access_token}}
+Content-Type: application/json
+
+{
+  "price": 0
+}
+
+
+### 10. Проверка невалидного stock
+### ожидаем 400
+PUT http://localhost:8080/api/v1/manage/products/{{seller_product_id}}
+Authorization: Bearer {{seller_access_token}}
+Content-Type: application/json
+
+{
+  "stock": -5
+}
+
+
+### 11. Удаление товара (soft delete)
+DELETE http://localhost:8080/api/v1/manage/products/{{seller_product_id}}
+Authorization: Bearer {{seller_access_token}}
+
+
+### 12. Seller видит скрытый товар
+### должен вернуть товар со статусом hidden
+GET http://localhost:8080/api/v1/manage/products
+Authorization: Bearer {{seller_access_token}}
+
+
+### 13. User больше не видит скрытый товар
+### должен вернуть 404
+GET http://localhost:8080/api/v1/products/{{seller_product_id}}
+Authorization: Bearer {{user_access_token}}

@@ -77,6 +77,9 @@ func parseFilter(c *gin.Context) (model.ProductFilter, error) {
 	if category := c.Query("category"); category != "" {
 		f.Category = &category
 	}
+	if status := c.Query("status"); status != "" {
+		f.Status = &status
+	}
 
 	priceMin, err := parseOptionalInt64(c, "price_min")
 	if err != nil {
@@ -307,4 +310,25 @@ func allowedPhotoExt(filename string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func (h *Handler) ListMine(c *gin.Context) {
+	sellerID, ok := sellerIDFromContext(c)
+	if !ok {
+		respond.Error(c, model.ErrForbidden)
+		return
+	}
+	filter, err := parseFilter(c)
+	if err != nil {
+		respond.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := h.service.ListMine(c.Request.Context(), sellerID, filter)
+	if err != nil {
+		respond.Error(c, err)
+		return
+	}
+	respond.JSON(c, http.StatusOK, productsResponse{
+		Items: result.Items, Total: result.Total, Page: result.Page, Limit: result.Limit,
+	})
 }
