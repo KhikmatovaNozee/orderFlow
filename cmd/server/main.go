@@ -15,16 +15,18 @@ import (
 	healthhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/health"
 	orderhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/order"
 	producthandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/product"
+	statshandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/stats"
 	"github.com/KhikmatovaNozee/orderFlow/internal/logger"
 	orderrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/order"
 	productrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/product"
+	statsrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/stats"
 	refreshtoken "github.com/KhikmatovaNozee/orderFlow/internal/repository/token"
 	userrepo "github.com/KhikmatovaNozee/orderFlow/internal/repository/user"
 	"github.com/KhikmatovaNozee/orderFlow/internal/router"
 	authservice "github.com/KhikmatovaNozee/orderFlow/internal/service/auth"
 	orderservice "github.com/KhikmatovaNozee/orderFlow/internal/service/order"
 	productservice "github.com/KhikmatovaNozee/orderFlow/internal/service/product"
-
+	statsservice "github.com/KhikmatovaNozee/orderFlow/internal/service/stats"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -104,8 +106,11 @@ func run(log *slog.Logger) error {
 	orderRepository := orderrepo.New(pool)
 	orderSvc := orderservice.NewService(orderRepository)
 	orderHandler := orderhandler.NewHandler(orderSvc)
+	statsRepository := statsrepo.New(pool)
+	statsSvc := statsservice.NewService(statsRepository)
+	statsHandler := statshandler.NewHandler(statsSvc)
 
-	engine := router.New(log, authHandler, jwtService, healthHandler, productHandler, orderHandler)
+	engine := router.New(log, authHandler, jwtService, healthHandler, productHandler, orderHandler, statsHandler)
 
 	srv := &http.Server{
 		Addr:              addr,

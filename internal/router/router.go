@@ -7,6 +7,7 @@ import (
 	healthhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/health"
 	orderhandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/order"
 	producthandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/product"
+	statshandler "github.com/KhikmatovaNozee/orderFlow/internal/handler/stats"
 	"github.com/KhikmatovaNozee/orderFlow/internal/middleware"
 	"github.com/KhikmatovaNozee/orderFlow/internal/service/auth"
 
@@ -20,6 +21,7 @@ func New(
 	healthHandler *healthhandler.Handler,
 	productHandler *producthandler.Handler,
 	orderHandler *orderhandler.Handler,
+	statsHandler *statshandler.Handler,
 ) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -72,6 +74,7 @@ func New(
 		manage.POST("/products/:id/photo", productHandler.UploadPhoto)
 		manage.GET("/orders", orderHandler.ListSellerOrders)
 		manage.GET("/orders/:id", orderHandler.GetSellerOrder)
+		manage.GET("/stats", statsHandler.Get)
 		manage.PUT("/orders/:id/ship", orderHandler.Ship)
 	}
 
