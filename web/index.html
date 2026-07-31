@@ -817,6 +817,7 @@
     function renderCatalogBody() {
         const el = document.getElementById("catalogBody");
         if (!el) return;
+        el.className = "";
         if (!catalogData.items || catalogData.items.length === 0) {
             el.innerHTML = `<div class="empty-state">
       <div class="big">Пусто ✨</div>
@@ -1026,6 +1027,7 @@
         }
         const el = document.getElementById("ordersBody");
         if (!el) return;
+        el.className = "";
         if (!data.items || data.items.length === 0) {
             el.innerHTML = `<div class="empty-state"><div class="big">Заказов пока нет</div>Загляните в каталог.</div>`;
             return;
@@ -1169,6 +1171,7 @@
         }
         const el = document.getElementById("sellerProductsBody");
         if (!el) return;
+        el.className = "";
         if (!data.items || data.items.length === 0) {
             el.innerHTML = `<div class="empty-state"><div class="big">Товаров пока нет</div>Добавьте первый — кнопка выше.</div>`;
             return;
@@ -1344,6 +1347,7 @@
         }
         const el = document.getElementById("sellerOrdersBody");
         if (!el) return;
+        el.className = "";
         if (!data.items || data.items.length === 0) {
             el.innerHTML = `<div class="empty-state"><div class="big">Заказов пока нет</div>Как только купят ваш товар — заказ появится тут.</div>`;
             return;
