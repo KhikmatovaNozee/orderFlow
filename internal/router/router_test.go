@@ -34,6 +34,8 @@ func TestNew(t *testing.T) {
 		"GET /api/v1/manage/orders",
 		"GET /api/v1/manage/orders/:id",
 		"GET /api/v1/manage/stats",
+		"GET /",
+		"HEAD /",
 	}
 
 	registered := make(map[string]bool)
