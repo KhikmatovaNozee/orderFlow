@@ -14,6 +14,7 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /app/orderflow .
+COPY --from=builder /app/web ./web
 
 EXPOSE 8080
 
