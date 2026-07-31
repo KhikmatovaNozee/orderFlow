@@ -27,6 +27,7 @@ func New(
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logging(log))
 	r.Static("/uploads", "./uploads")
+	r.StaticFile("/", "./web/index.html")
 
 	r.GET("/health", healthHandler.Check)
 
